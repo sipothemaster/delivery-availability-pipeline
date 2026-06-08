@@ -1,0 +1,11 @@
+steps:
+  - name: "gcr.io/cloud-builders/docker"
+    args:
+      - "build"
+      - "-f"
+      - "Dockerfile.tasks"
+      - "-t"
+      - "europe-west2-docker.pkg.dev/delivery-availability-research/delivery-pipeline/delivery-task-worker:latest"
+      - "."
+images:
+  - "europe-west2-docker.pkg.dev/delivery-availability-research/delivery-pipeline/delivery-task-worker:latest"

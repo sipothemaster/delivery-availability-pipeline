@@ -1,0 +1,18 @@
+.git
+.venv
+__pycache__/
+data/
+*.sqlite
+*.csv
+*.xlsx
+*.json.gz
+*.key.json
+*service-account*.json
+*credentials*.json
+.env
+
+# Keep only the files needed to build the Cloud Run worker image.
+!Dockerfile.tasks
+!requirements-cloud.txt
+!cloud_pipeline/**
+
