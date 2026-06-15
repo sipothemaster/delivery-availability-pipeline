@@ -1,5 +1,57 @@
 # Worklog
 
+## 2026-06-15
+
+### Done
+
+- Revisited the saved weekday raw JSON and confirmed the GCS raw files contain the full Just Eat API `restaurants` response, not only the open-now rows written to `restaurant_snapshots_weekday_full`.
+- Verified sample raw files:
+  - `ls42sw` existed in the older default `job_events` table, not in `job_events_weekday_full`.
+  - `ls42nh` existed in `job_events_weekday_full`.
+  - `ls42nh` raw JSON had 809 restaurants:
+    - `isDelivery=true`: 654
+    - `isDelivery=false`: 155
+    - open delivery rows previously written to snapshot table: 429
+- Designed a two-table static backfill model:
+  - `postcode_restaurant_delivery_map`
+  - `restaurant_profile`
+- Reworked `tools/backfill_raw_pairings.py` to:
+  - read saved `.json.gz` raw files from GCS
+  - parse all restaurants from `response.restaurants`
+  - write lightweight postcode-restaurant delivery map rows
+  - write deduplicated restaurant profile rows
+  - support either one `--raw-uri` or a BigQuery `--source-events-table`
+- Added `tools/` to `Dockerfile.tasks` and `.gcloudignore` so Cloud Build includes the backfill script in the Cloud Run image.
+- Validated locally on `ls42nh`:
+  - `postcode_restaurant_delivery_map_test`: 809 rows
+  - `restaurant_profile_test`: 809 rows
+  - generated restaurant URLs and join query worked.
+- Rebuilt and pushed the Cloud Run image:
+  - digest: `sha256:ea586d1651fd4744ed066998e6d598192920c6c0c40d645522b1f50cc11c5373`
+- Granted `scheduler-runner@delivery-availability-research.iam.gserviceaccount.com` the permissions needed for the backfill job:
+  - `roles/storage.objectViewer` on `gs://delivery-availability-research-data-sipo`
+  - `roles/bigquery.dataEditor`
+  - `roles/bigquery.jobUser`
+- Validated cloud execution on `ls42nh`:
+  - `postcode_restaurant_delivery_map_cloud_test2`: 809 rows
+  - `restaurant_profile_cloud_test2`: 809 rows
+  - generated URLs and join query worked.
+- Started full weekday raw backfill:
+  - Cloud Run Job: `raw-static-map-weekday-full-20260520`
+  - execution: `raw-static-map-weekday-full-20260520-j5j4j`
+  - source events table: `job_events_weekday_full`
+  - raw files to process: 43,062
+  - snapshot label: `weekday_full_20260520`
+  - output tables:
+    - `postcode_restaurant_delivery_map`
+    - `restaurant_profile`
+
+### Notes
+
+- `restaurant_profile` is written at the end of the job after in-memory deduplication by `restaurant_id`; the raw JSON is still read only once.
+- During early monitoring, `postcode_restaurant_delivery_map` was growing normally and `restaurant_profile` remained empty, as expected, until final profile flush.
+- The current static map intentionally excludes `captured_at`, `raw_uri`, open-now/preorder/offline tags, and other dynamic fields from the main map table.
+
 ## 2026-05-21
 
 ### Done

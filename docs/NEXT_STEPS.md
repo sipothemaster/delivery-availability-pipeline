@@ -1,6 +1,6 @@
 # Next Steps
 
-Last updated: 2026-05-21
+Last updated: 2026-06-15
 
 For a new Codex conversation, start with:
 
@@ -10,18 +10,65 @@ Read PROJECT_CONTEXT.md, WORKLOG.md, and NEXT_STEPS.md, then continue from the c
 
 ## Immediate Checks
 
-1. Fix or investigate manifest status updates:
+1. Monitor current weekday raw static backfill:
+   - Cloud Run Job: `raw-static-map-weekday-full-20260520`
+   - execution: `raw-static-map-weekday-full-20260520-j5j4j`
+   - source: `job_events_weekday_full`
+   - expected raw files: 43,062
+   - output tables:
+     - `postcode_restaurant_delivery_map`
+     - `restaurant_profile`
+   - `restaurant_profile` is expected to remain empty until the job finishes reading raw files and flushes deduplicated profiles.
+2. Validate final backfill output:
+   - `postcode_restaurant_delivery_map` row count and distinct postcode count.
+   - `restaurant_profile` row count and URL completeness.
+   - join sanity check by postcode, e.g. `ls42nh`.
+   - compare old open parser counts against the new all-restaurant map.
+3. Fix or investigate manifest status updates:
    - `weekday-full-20260519` has all jobs succeeded in `job_events`/`job_diagnostics`, but `job_manifest_weekday_full.status` stayed `pending`.
    - Until fixed, use events/diagnostics as completion truth.
-2. Decide whether to standardize production Just Eat rate settings at:
+4. Decide whether to standardize production Just Eat rate settings at:
    - Cloud Tasks `1/s`
    - concurrency `4`
    - worker global limiter spacing `1300ms`
    - 429 ban circuit `3600s`
-3. Query/export final comparison summary for:
+5. Query/export final comparison summary for:
    - `weekend-full-20260516`
    - `weekday-full-20260519`
-4. Decide whether to retry the 7 weekend postcodes that failed during the 2026-05-16 429 ban period.
+6. Decide whether to retry the 7 weekend postcodes that failed during the 2026-05-16 429 ban period.
+
+## Static Map Backfill
+
+Current static table design:
+
+- `postcode_restaurant_delivery_map`: lightweight postcode-restaurant delivery coverage map.
+- `restaurant_profile`: unique restaurant static/profile information and generated Just Eat restaurant URL.
+
+Near-term backfill tasks:
+
+1. Let `weekday_full_20260520` raw backfill finish.
+2. Run the same backfill for weekend raw data if final weekend `raw_uri` coverage is complete enough.
+3. Consider whether to keep old test tables or delete them later:
+   - `postcode_restaurant_delivery_map_test`
+   - `restaurant_profile_test`
+   - `postcode_restaurant_delivery_map_cloud_test`
+   - `postcode_restaurant_delivery_map_cloud_test2`
+   - `restaurant_profile_cloud_test`
+   - `restaurant_profile_cloud_test2`
+4. Build an enriched view for dashboard/EDA:
+
+```sql
+SELECT
+  p.*,
+  r.restaurant_name,
+  r.restaurant_url,
+  r.cuisine_names,
+  r.rating_star,
+  r.city
+FROM postcode_restaurant_delivery_map p
+LEFT JOIN restaurant_profile r
+USING (restaurant_id)
+```
 
 ## Weekend Run Follow-Up
 

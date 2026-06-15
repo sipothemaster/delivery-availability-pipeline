@@ -15,4 +15,4 @@ data/
 !Dockerfile.tasks
 !requirements-cloud.txt
 !cloud_pipeline/**
-
+!tools/**

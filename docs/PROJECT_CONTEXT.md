@@ -1,6 +1,6 @@
 # Project Context
 
-Last updated: 2026-05-21
+Last updated: 2026-06-15
 
 This file is the handoff memory for new Codex conversations. Read this first, then read `WORKLOG.md` and `NEXT_STEPS.md`.
 
@@ -25,6 +25,7 @@ Important files:
 - `cloud_pipeline/config.py`: Shared GCP and BigQuery config.
 - `cloud_pipeline/run_task_creator_job.py`: Cloud Run Job entrypoint for creating tasks in the cloud.
 - `cloud_pipeline/setup_tables.py`: BigQuery table setup.
+- `tools/backfill_raw_pairings.py`: Reads saved Just Eat raw `.json.gz` files from GCS and backfills static postcode-restaurant delivery map and restaurant profile tables.
 - `configs/task_creator_weekend_env.yaml`: Weekend full-run task creator environment.
 - `configs/task_creator_weekday_env.yaml`: Weekday full-run task creator environment.
 - `research/justeat_menu_reverse/reverse_justeat_menu.py`: Reverse-engineered menu extractor for restaurant pages.
@@ -141,6 +142,79 @@ Daily split:
 Known issue:
 
 - `job_manifest_weekday_full.status` remained `pending` for all rows even though `job_events` and `job_diagnostics` show the run succeeded. Use events/diagnostics as the source of truth until manifest update logic is fixed.
+
+Raw JSON/backfill status:
+
+- All 43,062 successful weekday jobs have `job_events_weekday_full.raw_uri`.
+- Raw files are stored in GCS under paths like:
+
+```text
+gs://delivery-availability-research-data-sipo/raw/provider=just_eat/date=2026-05-20/window=weekday/postcode=ls42nh_job=24e24774-04ab-5cdf-bc60-90040bb08f7e.json.gz
+```
+
+- These raw files contain the full API `response.restaurants` list.
+- `restaurant_snapshots_weekday_full` only contains rows that passed the old open-delivery parser:
+
+```text
+isDelivery=true
+isOpenNowForDelivery=true
+isTemporarilyOffline=false
+```
+
+- Therefore `restaurant_snapshots_weekday_full` is an open/current-delivery table, not the full postcode coverage map.
+- Current static raw backfill Cloud Run Job:
+  - job: `raw-static-map-weekday-full-20260520`
+  - execution: `raw-static-map-weekday-full-20260520-j5j4j`
+  - source events table: `job_events_weekday_full`
+  - raw files: 43,062
+  - snapshot label: `weekday_full_20260520`
+  - output tables:
+    - `delivery_availability.postcode_restaurant_delivery_map`
+    - `delivery_availability.restaurant_profile`
+
+Static backfill table model:
+
+```text
+postcode_restaurant_delivery_map
+  snapshot_label
+  postcode
+  restaurant_id
+  is_delivery
+  delivery_fee
+  minimum_delivery_value
+  delivery_eta_lower_minutes
+  delivery_eta_upper_minutes
+  drive_distance_meters
+
+restaurant_profile
+  restaurant_id
+  restaurant_name
+  restaurant_unique_name
+  restaurant_url
+  address_first_line
+  city
+  postal_code
+  latitude
+  longitude
+  cuisine_names
+  cuisine_unique_names
+  rating_count
+  rating_star
+  logo_url
+```
+
+Restaurant URLs are not directly present as `url` in the postcode API JSON. They are generated from `uniqueName`:
+
+```text
+https://www.just-eat.co.uk/restaurants-{restaurant_unique_name}/menu
+```
+
+Sample `ls42nh` weekday raw JSON:
+
+- Total restaurants in raw: 809.
+- `isDelivery=true`: 654.
+- `isDelivery=false`: 155.
+- Open delivery rows under the old parser: 429.
 
 Relevant config support:
 
@@ -410,4 +484,5 @@ Do not delete files yet; user asked to defer cleanup. Current cleanup candidates
   - `Dockerfile.tasks`
   - `cloudbuild.tasks.yaml`
   - `requirements-cloud.txt`
+  - `tools/backfill_raw_pairings.py`
   - `research/justeat_menu_reverse/reverse_justeat_menu.py`
