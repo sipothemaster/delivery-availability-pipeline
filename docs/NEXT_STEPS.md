@@ -10,32 +10,26 @@ Read PROJECT_CONTEXT.md, WORKLOG.md, and NEXT_STEPS.md, then continue from the c
 
 ## Immediate Checks
 
-1. Monitor current weekday raw static backfill:
-   - Cloud Run Job: `raw-static-map-weekday-full-20260520`
-   - execution: `raw-static-map-weekday-full-20260520-j5j4j`
-   - source: `job_events_weekday_full`
-   - expected raw files: 43,062
-   - output tables:
-     - `postcode_restaurant_delivery_map`
-     - `restaurant_profile`
-   - `restaurant_profile` is expected to remain empty until the job finishes reading raw files and flushes deduplicated profiles.
-2. Validate final backfill output:
-   - `postcode_restaurant_delivery_map` row count and distinct postcode count.
-   - `restaurant_profile` row count and URL completeness.
+1. Validate and document final weekday static map output:
+   - `postcode_restaurant_delivery_map`: 16,534,508 rows.
+   - `restaurant_profile`: 100,850 rows.
    - join sanity check by postcode, e.g. `ls42nh`.
    - compare old open parser counts against the new all-restaurant map.
-3. Fix or investigate manifest status updates:
+   - decide how dashboard queries should handle ETA outliers.
+2. Build an enriched BigQuery view for EDA/dashboard use.
+3. Decide whether to backfill the weekend raw data into the same two-table static model.
+4. Fix or investigate manifest status updates:
    - `weekday-full-20260519` has all jobs succeeded in `job_events`/`job_diagnostics`, but `job_manifest_weekday_full.status` stayed `pending`.
    - Until fixed, use events/diagnostics as completion truth.
-4. Decide whether to standardize production Just Eat rate settings at:
+5. Decide whether to standardize production Just Eat rate settings at:
    - Cloud Tasks `1/s`
    - concurrency `4`
    - worker global limiter spacing `1300ms`
    - 429 ban circuit `3600s`
-5. Query/export final comparison summary for:
+6. Query/export final comparison summary for:
    - `weekend-full-20260516`
    - `weekday-full-20260519`
-6. Decide whether to retry the 7 weekend postcodes that failed during the 2026-05-16 429 ban period.
+7. Decide whether to retry the 7 weekend postcodes that failed during the 2026-05-16 429 ban period.
 
 ## Static Map Backfill
 
@@ -46,8 +40,8 @@ Current static table design:
 
 Near-term backfill tasks:
 
-1. Let `weekday_full_20260520` raw backfill finish.
-2. Run the same backfill for weekend raw data if final weekend `raw_uri` coverage is complete enough.
+1. Run the same backfill for weekend raw data if final weekend `raw_uri` coverage is complete enough.
+2. Add dashboard-safe filters or derived fields for ETA outliers.
 3. Consider whether to keep old test tables or delete them later:
    - `postcode_restaurant_delivery_map_test`
    - `restaurant_profile_test`

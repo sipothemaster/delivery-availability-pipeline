@@ -162,15 +162,29 @@ isTemporarilyOffline=false
 ```
 
 - Therefore `restaurant_snapshots_weekday_full` is an open/current-delivery table, not the full postcode coverage map.
-- Current static raw backfill Cloud Run Job:
+- Static raw backfill Cloud Run Job:
   - job: `raw-static-map-weekday-full-20260520`
   - execution: `raw-static-map-weekday-full-20260520-j5j4j`
+  - status: completed successfully
+  - duration: 1h28m32s
   - source events table: `job_events_weekday_full`
-  - raw files: 43,062
+  - raw files processed: 43,062
   - snapshot label: `weekday_full_20260520`
   - output tables:
     - `delivery_availability.postcode_restaurant_delivery_map`
     - `delivery_availability.restaurant_profile`
+
+Final weekday static backfill output:
+
+- `postcode_restaurant_delivery_map`: 16,534,508 rows.
+- Postcodes with at least one restaurant in the map: 42,122.
+- Distinct restaurants in the map: 100,850.
+- `is_delivery=true`: 13,144,889 rows.
+- `is_delivery=false`: 3,389,619 rows.
+- `restaurant_profile`: 100,850 rows.
+- `restaurant_profile` URL/location/cuisine completeness: 100%.
+- Restaurants skipped without id: 0.
+- Some ETA values are raw API outliers, e.g. negative lower bounds and very high upper bounds; filter/cap ETA for dashboard use.
 
 Static backfill table model:
 

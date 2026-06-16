@@ -36,21 +36,35 @@
   - `postcode_restaurant_delivery_map_cloud_test2`: 809 rows
   - `restaurant_profile_cloud_test2`: 809 rows
   - generated URLs and join query worked.
-- Started full weekday raw backfill:
+- Ran full weekday raw backfill:
   - Cloud Run Job: `raw-static-map-weekday-full-20260520`
   - execution: `raw-static-map-weekday-full-20260520-j5j4j`
+  - status: completed successfully
+  - duration: 1h28m32s
   - source events table: `job_events_weekday_full`
-  - raw files to process: 43,062
+  - raw files processed: 43,062
   - snapshot label: `weekday_full_20260520`
   - output tables:
     - `postcode_restaurant_delivery_map`
     - `restaurant_profile`
+- Final full weekday raw backfill output:
+  - `postcode_restaurant_delivery_map`: 16,534,508 rows
+  - map postcodes with at least one restaurant: 42,122
+  - map distinct restaurants: 100,850
+  - `is_delivery=true`: 13,144,889 rows
+  - `is_delivery=false`: 3,389,619 rows
+  - `restaurant_profile`: 100,850 rows
+  - `restaurant_profile` URL completeness: 100,850/100,850
+  - `restaurant_profile` location completeness: 100,850/100,850
+  - `restaurant_profile` cuisine completeness: 100,850/100,850
+  - restaurants skipped without id: 0
 
 ### Notes
 
 - `restaurant_profile` is written at the end of the job after in-memory deduplication by `restaurant_id`; the raw JSON is still read only once.
-- During early monitoring, `postcode_restaurant_delivery_map` was growing normally and `restaurant_profile` remained empty, as expected, until final profile flush.
 - The current static map intentionally excludes `captured_at`, `raw_uri`, open-now/preorder/offline tags, and other dynamic fields from the main map table.
+- Some raw jobs had zero restaurants: 43,062 raw jobs vs. 42,122 postcodes appearing in `postcode_restaurant_delivery_map`.
+- ETA values include a few raw API outliers such as negative lower bounds and very high upper bounds; dashboard queries should filter or cap ETA where needed.
 
 ## 2026-05-21
 
