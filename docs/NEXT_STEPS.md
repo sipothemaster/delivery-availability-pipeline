@@ -1,6 +1,6 @@
 # Next Steps
 
-Last updated: 2026-06-15
+Last updated: 2026-06-17
 
 For a new Codex conversation, start with:
 
@@ -10,26 +10,32 @@ Read PROJECT_CONTEXT.md, WORKLOG.md, and NEXT_STEPS.md, then continue from the c
 
 ## Immediate Checks
 
-1. Validate and document final weekday static map output:
+1. Monitor `temporal-snapshot-20260617`:
+   - first active window: `weekday_afternoon`, 2026-06-17 14:00-18:00 Europe/London.
+   - use `job_events_temporal_snapshot_202606` and `job_diagnostics_temporal_snapshot_202606`.
+   - check started/succeeded/failed/deferred counts.
+   - confirm `http_status=200` and no 429.
+   - confirm `restaurant_snapshots_temporal_snapshot_202606.planned_window` values are the intended tags.
+2. Validate and document final weekday static map output:
    - `postcode_restaurant_delivery_map`: 16,534,508 rows.
    - `restaurant_profile`: 100,850 rows.
    - join sanity check by postcode, e.g. `ls42nh`.
    - compare old open parser counts against the new all-restaurant map.
    - decide how dashboard queries should handle ETA outliers.
-2. Build an enriched BigQuery view for EDA/dashboard use.
-3. Decide whether to backfill the weekend raw data into the same two-table static model.
-4. Fix or investigate manifest status updates:
+3. Build an enriched BigQuery view for EDA/dashboard use.
+4. Decide whether to backfill the weekend raw data into the same two-table static model.
+5. Fix or investigate manifest status updates:
    - `weekday-full-20260519` has all jobs succeeded in `job_events`/`job_diagnostics`, but `job_manifest_weekday_full.status` stayed `pending`.
    - Until fixed, use events/diagnostics as completion truth.
-5. Decide whether to standardize production Just Eat rate settings at:
+6. Decide whether to standardize production Just Eat rate settings at:
    - Cloud Tasks `1/s`
    - concurrency `4`
    - worker global limiter spacing `1300ms`
    - 429 ban circuit `3600s`
-6. Query/export final comparison summary for:
+7. Query/export final comparison summary for:
    - `weekend-full-20260516`
    - `weekday-full-20260519`
-7. Decide whether to retry the 7 weekend postcodes that failed during the 2026-05-16 429 ban period.
+8. Decide whether to retry the 7 weekend postcodes that failed during the 2026-05-16 429 ban period.
 
 ## Static Map Backfill
 

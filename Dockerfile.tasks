@@ -10,5 +10,6 @@ RUN pip install --no-cache-dir -r requirements-cloud.txt
 
 COPY cloud_pipeline ./cloud_pipeline
 COPY tools ./tools
+COPY configs ./configs
 
 CMD ["gunicorn", "--bind", "0.0.0.0:8080", "--workers", "2", "--threads", "8", "--timeout", "120", "cloud_pipeline.task_worker_service:app"]

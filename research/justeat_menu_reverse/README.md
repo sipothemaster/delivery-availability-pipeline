@@ -16,6 +16,16 @@ The script reads saved restaurant page HTML files, extracts menu metadata from
 `__NEXT_DATA__`, downloads menu CDN JSON files when available, and writes
 normalized CSV outputs.
 
+Additional probe:
+
+```text
+probe_justeat_menu_cdn.py
+```
+
+This script verifies that restaurant menu CDN JSON can be requested directly
+from the restaurant slug/`restaurant_unique_name`, without first downloading
+the restaurant HTML page.
+
 ## Data Source Relationship
 
 Observed structure:
@@ -47,6 +57,22 @@ CDN base observed during research:
 https://menu-globalmenucdn.je-apis.com
 ```
 
+Later reverse-engineering found that the CDN paths can be constructed directly
+from the restaurant slug:
+
+```text
+https://menu-globalmenucdn.je-apis.com/{slug}_uk_manifest.json
+https://menu-globalmenucdn.je-apis.com/v2_2/{slug}_uk_manifest.json
+https://menu-globalmenucdn.je-apis.com/{slug}_uk_items.json
+https://menu-globalmenucdn.je-apis.com/{slug}_uk_itemDetails.json
+```
+
+The manifest contains restaurant metadata, opening times, menu/category
+schedules, and the `ItemsUrl` / `ItemDetailsUrl` values. This means the future
+menu pipeline can usually use `restaurant_profile.restaurant_unique_name` to
+fetch menu data directly from the CDN and avoid the heavier restaurant HTML
+request.
+
 Dynamic menu API observed:
 
 ```text
@@ -74,4 +100,3 @@ deal_options.csv
 ```
 
 These outputs are intentionally not committed.
-

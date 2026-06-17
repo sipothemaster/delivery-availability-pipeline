@@ -16,3 +16,4 @@ data/
 !requirements-cloud.txt
 !cloud_pipeline/**
 !tools/**
+!configs/**

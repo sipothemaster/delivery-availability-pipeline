@@ -1,6 +1,6 @@
 # Project Context
 
-Last updated: 2026-06-15
+Last updated: 2026-06-17
 
 This file is the handoff memory for new Codex conversations. Read this first, then read `WORKLOG.md` and `NEXT_STEPS.md`.
 
@@ -28,6 +28,8 @@ Important files:
 - `tools/backfill_raw_pairings.py`: Reads saved Just Eat raw `.json.gz` files from GCS and backfills static postcode-restaurant delivery map and restaurant profile tables.
 - `configs/task_creator_weekend_env.yaml`: Weekend full-run task creator environment.
 - `configs/task_creator_weekday_env.yaml`: Weekday full-run task creator environment.
+- `configs/temporal_snapshot_windows_202606.json`: Explicit temporal snapshot windows.
+- `configs/task_creator_temporal_snapshot_202606_env.yaml`: Temporal snapshot task creator environment.
 - `research/justeat_menu_reverse/reverse_justeat_menu.py`: Reverse-engineered menu extractor for restaurant pages.
 
 Important local outputs:
@@ -58,6 +60,79 @@ Project/resource defaults:
 - BigQuery dataset: `delivery_availability`
 
 Use `gcloud.cmd` from PowerShell if `gcloud` itself is not resolved.
+
+## Temporal Snapshot Run
+
+Production temporal open-now snapshot run:
+
+- Run id: `temporal-snapshot-20260617`
+- Full postcode input: `gs://delivery-availability-research-data-sipo/input/postcodes_full.csv`
+- Full postcode count: 43,062
+- Total Cloud Tasks: 172,248
+- BigQuery table suffix: `_temporal_snapshot_202606`
+- `planned_window` is the tag field.
+
+Temporal tags/windows:
+
+- `weekday_afternoon`
+  - 2026-06-17 14:00-18:00 Europe/London
+  - 2026-06-18 14:00-18:00 Europe/London
+  - 2026-06-24 14:00-18:00 Europe/London
+  - 2026-06-25 14:00-18:00 Europe/London
+- `weekday_evening`
+  - 2026-06-17 18:30-22:30 Europe/London
+  - 2026-06-18 18:30-22:30 Europe/London
+  - 2026-06-24 18:30-22:30 Europe/London
+  - 2026-06-25 18:30-22:30 Europe/London
+- `weekday_early_hours`
+  - 2026-06-18 00:00-04:00 Europe/London
+  - 2026-06-19 00:00-04:00 Europe/London
+  - 2026-06-25 00:00-04:00 Europe/London
+  - 2026-06-26 00:00-04:00 Europe/London
+- `saturday_peak`
+  - 2026-06-20 14:00-22:00 Europe/London
+  - 2026-06-27 14:00-22:00 Europe/London
+
+Temporal GCP resources:
+
+- Cloud Tasks queue: `delivery-scrape-temporal-202606`
+- Cloud Run worker: `delivery-task-worker-temporal`
+- Worker URL: `https://delivery-task-worker-temporal-280046610687.europe-west2.run.app`
+- Cloud Run Job creator: `delivery-task-creator-temporal-202606`
+- Task creator execution used for launch: `delivery-task-creator-temporal-202606-8rf8h`
+
+Temporal worker settings:
+
+- Cloud Tasks rate: `1/s`
+- Cloud Tasks concurrency: `4`
+- worker global limiter spacing: `1300ms`
+- worker start guard: `1000ms`
+- limiter key: `justeat-temporal-202606-1300ms`
+- 429 ban circuit enabled for `3600s`
+
+Temporal smoke test:
+
+- Run id: `temporal-smoke-20260617`
+- 40/40 jobs succeeded.
+- 0 failed/deferred.
+- 40 HTTP 200 diagnostics.
+- 16,007 `restaurant_snapshots_temporal_snapshot_202606` rows.
+
+Temporal output tables:
+
+- `delivery_availability.job_manifest_temporal_snapshot_202606`
+- `delivery_availability.job_events_temporal_snapshot_202606`
+- `delivery_availability.job_diagnostics_temporal_snapshot_202606`
+- `delivery_availability.restaurant_snapshots_temporal_snapshot_202606`
+- `delivery_availability.scrape_jobs_temporal_snapshot_202606`
+
+The temporal worker uses the same open-now parser shape as `weekday_full`:
+
+```text
+isDelivery=true
+isOpenNowForDelivery=true
+isTemporarilyOffline=false
+```
 
 ## Weekend Full Run
 

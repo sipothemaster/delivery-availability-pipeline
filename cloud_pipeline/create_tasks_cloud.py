@@ -4,6 +4,7 @@ import io
 import json
 import re
 import uuid
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, time, timedelta
 from pathlib import Path
 from zoneinfo import ZoneInfo
@@ -133,6 +134,34 @@ def daily_windows_for(names, start_date_text, days, start_time_text, end_time_te
         end = datetime.combine(current_date, end_time).isoformat()
         intervals.append((start, end))
     return {name: intervals for name in names}
+
+
+def explicit_windows_for(names, intervals_json=None, intervals_file=None):
+    if intervals_file:
+        intervals_json = Path(intervals_file).read_text(encoding="utf-8")
+    data = json.loads(intervals_json)
+    if not isinstance(data, dict):
+        raise ValueError("Explicit window intervals must be a JSON object.")
+
+    windows_config = {}
+    for name in names:
+        intervals = data.get(name)
+        if not isinstance(intervals, list) or not intervals:
+            raise ValueError(f"No explicit intervals configured for window: {name}")
+        normalized = []
+        for interval in intervals:
+            if (
+                not isinstance(interval, (list, tuple))
+                or len(interval) != 2
+                or not interval[0]
+                or not interval[1]
+            ):
+                raise ValueError(
+                    "Each explicit interval must be [local_start, local_end]."
+                )
+            normalized.append(local_window_interval(interval[0], interval[1]))
+        windows_config[name] = normalized
+    return windows_config
 
 
 def fetch_existing_postcodes(run_id, windows):
@@ -296,41 +325,81 @@ def ensure_queue(queue_id, max_dispatches_per_second, max_concurrent_dispatches)
         return client.update_queue(queue=queue)
 
 
-def create_tasks(payloads, queue_id, service_url, oidc_service_account_email, dry_run=False):
+def create_task(client, parent, payload, queue_id, service_url, oidc_service_account_email, dry_run=False):
+    scheduled_at = datetime.fromisoformat(payload["scheduled_at"])
+    schedule_time = timestamp_pb2.Timestamp()
+    schedule_time.FromDatetime(scheduled_at)
+    task = tasks_v2.Task(
+        name=client.task_path(
+            config.PROJECT_ID,
+            config.LOCATION,
+            queue_id,
+            task_id_for_job(payload["job_id"]),
+        ),
+        http_request=tasks_v2.HttpRequest(
+            http_method=tasks_v2.HttpMethod.POST,
+            url=f"{service_url.rstrip('/')}/tasks/justeat",
+            headers={"Content-Type": "application/json"},
+            body=json.dumps(payload).encode("utf-8"),
+            oidc_token=tasks_v2.OidcToken(
+                service_account_email=oidc_service_account_email,
+            ),
+        ),
+        schedule_time=schedule_time,
+    )
+    if dry_run:
+        return {"job_id": payload["job_id"], "task_name": None}
+    try:
+        response = client.create_task(parent=parent, task=task)
+        task_name = response.name
+    except AlreadyExists:
+        task_name = task.name
+    return {"job_id": payload["job_id"], "task_name": task_name}
+
+
+def create_tasks(
+    payloads,
+    queue_id,
+    service_url,
+    oidc_service_account_email,
+    dry_run=False,
+    create_task_workers=1,
+):
     client = tasks_v2.CloudTasksClient()
     parent = client.queue_path(config.PROJECT_ID, config.LOCATION, queue_id)
-    created = []
-    for payload in payloads:
-        scheduled_at = datetime.fromisoformat(payload["scheduled_at"])
-        schedule_time = timestamp_pb2.Timestamp()
-        schedule_time.FromDatetime(scheduled_at)
-        task = tasks_v2.Task(
-            name=client.task_path(
-                config.PROJECT_ID,
-                config.LOCATION,
+    if create_task_workers <= 1 or dry_run:
+        return [
+            create_task(
+                client,
+                parent,
+                payload,
                 queue_id,
-                task_id_for_job(payload["job_id"]),
-            ),
-            http_request=tasks_v2.HttpRequest(
-                http_method=tasks_v2.HttpMethod.POST,
-                url=f"{service_url.rstrip('/')}/tasks/justeat",
-                headers={"Content-Type": "application/json"},
-                body=json.dumps(payload).encode("utf-8"),
-                oidc_token=tasks_v2.OidcToken(
-                    service_account_email=oidc_service_account_email,
-                ),
-            ),
-            schedule_time=schedule_time,
-        )
-        if dry_run:
-            created.append({"job_id": payload["job_id"], "task_name": None})
-            continue
-        try:
-            response = client.create_task(parent=parent, task=task)
-            task_name = response.name
-        except AlreadyExists:
-            task_name = task.name
-        created.append({"job_id": payload["job_id"], "task_name": task_name})
+                service_url,
+                oidc_service_account_email,
+                dry_run=dry_run,
+            )
+            for payload in payloads
+        ]
+
+    created = []
+    with ThreadPoolExecutor(max_workers=create_task_workers) as executor:
+        futures = [
+            executor.submit(
+                create_task,
+                client,
+                parent,
+                payload,
+                queue_id,
+                service_url,
+                oidc_service_account_email,
+                False,
+            )
+            for payload in payloads
+        ]
+        for index, future in enumerate(as_completed(futures), start=1):
+            created.append(future.result())
+            if index % 1000 == 0:
+                print(f"Created/saw {index} Cloud Tasks...", flush=True)
     return created
 
 
@@ -408,11 +477,28 @@ def parse_args():
         help="Daily local end time, e.g. 20:00.",
     )
     parser.add_argument(
+        "--window-intervals-json",
+        help=(
+            "Explicit window interval mapping as JSON, e.g. "
+            '{"weekday_afternoon":[["2026-06-17T14:00:00","2026-06-17T18:00:00"]]}'
+        ),
+    )
+    parser.add_argument(
+        "--window-intervals-file",
+        help="Path to a JSON file containing explicit window interval mapping.",
+    )
+    parser.add_argument(
         "--skip-existing",
         action="store_true",
         help="Skip postcodes already present in job_manifest for each planned window.",
     )
     parser.add_argument("--dry-run", action="store_true")
+    parser.add_argument(
+        "--create-task-workers",
+        type=int,
+        default=1,
+        help="Number of parallel workers for creating Cloud Tasks.",
+    )
     return parser.parse_args()
 
 
@@ -434,8 +520,21 @@ def main():
         )
     if using_daily_windows and args.custom_local_start:
         raise ValueError("Use either custom local window or daily windows, not both.")
+    using_explicit_windows = bool(args.window_intervals_json or args.window_intervals_file)
+    if args.window_intervals_json and args.window_intervals_file:
+        raise ValueError("Use either --window-intervals-json or --window-intervals-file, not both.")
+    if using_explicit_windows and (using_daily_windows or args.custom_local_start):
+        raise ValueError(
+            "Use explicit window intervals, custom local window, or daily windows, not more than one."
+        )
 
-    if using_daily_windows:
+    if using_explicit_windows:
+        windows_config = explicit_windows_for(
+            args.windows,
+            intervals_json=args.window_intervals_json,
+            intervals_file=args.window_intervals_file,
+        )
+    elif using_daily_windows:
         windows_config = daily_windows_for(
             args.windows,
             args.daily_start_date,
@@ -532,6 +631,7 @@ def main():
         service_url=args.service_url,
         oidc_service_account_email=args.oidc_service_account_email,
         dry_run=False,
+        create_task_workers=args.create_task_workers,
     )
     print(f"Created {len(created_tasks)} Cloud Tasks in queue {args.queue_id}")
     print(f"Inserted {len(new_manifest_rows)} rows into {config.table_id('job_manifest')}")

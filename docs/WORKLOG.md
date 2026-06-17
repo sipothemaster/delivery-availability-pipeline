@@ -1,5 +1,68 @@
 # Worklog
 
+## 2026-06-17
+
+### Done
+
+- Designed and launched a new temporal Just Eat open-now snapshot run using the same worker/parser shape as `weekday_full`.
+- Added explicit window interval support to `cloud_pipeline/create_tasks_cloud.py`:
+  - `--window-intervals-json`
+  - `--window-intervals-file`
+- Added Cloud Run Job env support for:
+  - `WINDOW_INTERVALS_JSON`
+  - `WINDOW_INTERVALS_FILE`
+  - `CREATE_TASK_WORKERS`
+- Added controlled parallel Cloud Tasks creation via `--create-task-workers`.
+- Added temporal schedule/config files:
+  - `configs/temporal_snapshot_windows_202606.json`
+  - `configs/task_creator_temporal_snapshot_202606_env.yaml`
+- Updated build packaging so `configs/` is included in `Dockerfile.tasks` and `.gcloudignore`.
+- Created new temporal BigQuery tables with suffix `_temporal_snapshot_202606`.
+- Created new Cloud Tasks queue:
+  - `delivery-scrape-temporal-202606`
+  - rate `1/s`
+  - concurrency `4`
+- Deployed new Cloud Run worker:
+  - service: `delivery-task-worker-temporal`
+  - URL: `https://delivery-task-worker-temporal-280046610687.europe-west2.run.app`
+  - worker limiter key: `justeat-temporal-202606-1300ms`
+  - worker limiter spacing: `1300ms`
+  - 429 ban circuit: `3600s`
+- Ran a 40-postcode cloud smoke test:
+  - run id: `temporal-smoke-20260617`
+  - `40` started
+  - `40` succeeded
+  - `0` failed/deferred
+  - diagnostics: `40` HTTP 200
+  - snapshot rows: `16,007`
+- Created and executed Cloud Run Job task creator:
+  - job: `delivery-task-creator-temporal-202606`
+  - execution: `delivery-task-creator-temporal-202606-8rf8h`
+  - status: completed successfully
+- Created production temporal manifest/tasks:
+  - run id: `temporal-snapshot-20260617`
+  - total tasks: `172,248`
+  - `weekday_afternoon`: `43,062`
+  - `weekday_evening`: `43,062`
+  - `weekday_early_hours`: `43,062`
+  - `saturday_peak`: `43,062`
+
+### Temporal Windows
+
+- `weekday_afternoon`: 2026-06-17/18/24/25, 14:00-18:00 Europe/London.
+- `weekday_evening`: 2026-06-17/18/24/25, 18:30-22:30 Europe/London.
+- `weekday_early_hours`: 2026-06-18/19/25/26, 00:00-04:00 Europe/London.
+- `saturday_peak`: 2026-06-20/27, 14:00-22:00 Europe/London.
+
+### Notes
+
+- The temporal run uses `planned_window` as the tag field.
+- The worker still writes only open-now delivery rows:
+  - `isDelivery=true`
+  - `isOpenNowForDelivery=true`
+  - `isTemporarilyOffline=false`
+- The new suffix keeps temporal output isolated from `weekday_full` and `weekend_full`.
+
 ## 2026-06-15
 
 ### Done

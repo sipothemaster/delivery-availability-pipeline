@@ -52,6 +52,14 @@ def main():
         add_arg(args, "--daily-local-start-time", daily_start_time)
         add_arg(args, "--daily-local-end-time", daily_end_time)
 
+    window_intervals_json = os.getenv("WINDOW_INTERVALS_JSON")
+    if window_intervals_json:
+        add_arg(args, "--window-intervals-json", window_intervals_json)
+
+    window_intervals_file = os.getenv("WINDOW_INTERVALS_FILE")
+    if window_intervals_file:
+        add_arg(args, "--window-intervals-file", window_intervals_file)
+
     limit_postcodes = os.getenv("LIMIT_POSTCODES")
     if limit_postcodes:
         add_arg(args, "--limit-postcodes", limit_postcodes)
@@ -67,6 +75,10 @@ def main():
 
     if os.getenv("DRY_RUN", "false").lower() in {"1", "true", "yes", "y"}:
         add_arg(args, "--dry-run")
+
+    create_task_workers = os.getenv("CREATE_TASK_WORKERS")
+    if create_task_workers:
+        add_arg(args, "--create-task-workers", create_task_workers)
 
     sys.argv = ["create_tasks_cloud", *args]
     create_tasks_cloud.main()
