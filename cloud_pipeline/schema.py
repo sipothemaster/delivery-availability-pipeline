@@ -107,3 +107,64 @@ JOB_DIAGNOSTICS_SCHEMA = [
     bigquery.SchemaField("raw_uri", "STRING"),
     bigquery.SchemaField("error", "STRING"),
 ]
+
+
+MENU_MANIFEST_TASKS_SCHEMA = [
+    bigquery.SchemaField("task_id", "STRING", mode="REQUIRED"),
+    bigquery.SchemaField("run_id", "STRING", mode="REQUIRED"),
+    bigquery.SchemaField("restaurant_id", "STRING", mode="REQUIRED"),
+    bigquery.SchemaField("restaurant_name", "STRING"),
+    bigquery.SchemaField("restaurant_unique_name", "STRING", mode="REQUIRED"),
+    bigquery.SchemaField("restaurant_url", "STRING"),
+    bigquery.SchemaField("cuisine_names", "STRING"),
+    bigquery.SchemaField("scheduled_at", "TIMESTAMP", mode="REQUIRED"),
+    bigquery.SchemaField("created_at", "TIMESTAMP", mode="REQUIRED"),
+    bigquery.SchemaField("task_name", "STRING"),
+]
+
+
+MENU_MANIFEST_RESULTS_SCHEMA = [
+    bigquery.SchemaField("result_id", "STRING", mode="REQUIRED"),
+    bigquery.SchemaField("task_id", "STRING", mode="REQUIRED"),
+    bigquery.SchemaField("run_id", "STRING", mode="REQUIRED"),
+    bigquery.SchemaField("restaurant_id", "STRING", mode="REQUIRED"),
+    bigquery.SchemaField("restaurant_name", "STRING"),
+    bigquery.SchemaField("restaurant_unique_name", "STRING", mode="REQUIRED"),
+    bigquery.SchemaField("restaurant_url", "STRING"),
+    bigquery.SchemaField("cuisine_names", "STRING"),
+    bigquery.SchemaField("fetched_at", "TIMESTAMP", mode="REQUIRED"),
+    bigquery.SchemaField("manifest_source", "STRING"),
+    bigquery.SchemaField("manifest_url", "STRING"),
+    bigquery.SchemaField("http_status", "INTEGER"),
+    bigquery.SchemaField("latency_ms", "INTEGER"),
+    bigquery.SchemaField("fallback_used", "BOOLEAN"),
+    bigquery.SchemaField("manifest_restaurant_id", "STRING"),
+    bigquery.SchemaField("manifest_name", "STRING"),
+    bigquery.SchemaField("timezone", "STRING"),
+    bigquery.SchemaField("is_offline", "BOOLEAN"),
+    bigquery.SchemaField("menu_count", "INTEGER"),
+    bigquery.SchemaField("items_url", "STRING"),
+    bigquery.SchemaField("item_details_url", "STRING"),
+    bigquery.SchemaField("opening_time_count", "INTEGER"),
+    bigquery.SchemaField("opening_service_types", "STRING"),
+    bigquery.SchemaField("outcome", "STRING"),
+    bigquery.SchemaField("error", "STRING"),
+]
+
+
+RESTAURANT_OPENING_TIMES_SCHEMA = [
+    bigquery.SchemaField("opening_time_id", "STRING", mode="REQUIRED"),
+    bigquery.SchemaField("task_id", "STRING", mode="REQUIRED"),
+    bigquery.SchemaField("run_id", "STRING", mode="REQUIRED"),
+    bigquery.SchemaField("restaurant_id", "STRING", mode="REQUIRED"),
+    bigquery.SchemaField("restaurant_unique_name", "STRING", mode="REQUIRED"),
+    bigquery.SchemaField("service_type", "STRING"),
+    bigquery.SchemaField("day_of_week", "STRING"),
+    bigquery.SchemaField("interval_index", "INTEGER"),
+    bigquery.SchemaField("opens_at_local", "STRING"),
+    bigquery.SchemaField("closes_at_local", "STRING"),
+    bigquery.SchemaField("crosses_midnight", "BOOLEAN"),
+    bigquery.SchemaField("timezone", "STRING"),
+    bigquery.SchemaField("source", "STRING"),
+    bigquery.SchemaField("fetched_at", "TIMESTAMP", mode="REQUIRED"),
+]

@@ -4,6 +4,8 @@ import os
 import time
 import uuid
 from datetime import datetime, timezone
+from urllib.error import HTTPError, URLError
+from urllib.request import Request, urlopen
 
 from flask import Flask, jsonify, request
 from google.api_core.exceptions import NotFound, PreconditionFailed
@@ -19,6 +21,12 @@ from cloud_pipeline.justeat_api import (
 
 
 app = Flask(__name__)
+
+MENU_CDN_BASE = "https://menu-globalmenucdn.je-apis.com"
+MENU_USER_AGENT = (
+    "DFRE-DeliveryAvailabilityResearch/1.0 "
+    "(menu manifest checker; contact: research-contact@example.com)"
+)
 
 
 def utc_now():
@@ -104,6 +112,215 @@ def parse_open_restaurants(data):
         and not restaurant.get("isTemporarilyOffline")
     ]
     return [api_restaurant_to_row(restaurant, grocery_ids) for restaurant in open_restaurants]
+
+
+class MenuManifestError(RuntimeError):
+    def __init__(
+        self,
+        message,
+        url,
+        status_code=None,
+        latency_ms=None,
+        started_at=None,
+        finished_at=None,
+    ):
+        super().__init__(message)
+        self.url = url
+        self.status_code = status_code
+        self.latency_ms = latency_ms
+        self.started_at = started_at
+        self.finished_at = finished_at
+
+
+def fetch_menu_manifest_url(url):
+    started_at = utc_now_precise()
+    start_time = time.perf_counter()
+    request = Request(
+        url,
+        headers={
+            "Accept": "application/json",
+            "User-Agent": MENU_USER_AGENT,
+        },
+    )
+    try:
+        with urlopen(request, timeout=30) as response:
+            body = response.read().decode("utf-8")
+            finished_at = utc_now_precise()
+            latency_ms = int((time.perf_counter() - start_time) * 1000)
+            return json.loads(body), {
+                "http_status": int(response.status),
+                "latency_ms": latency_ms,
+                "started_at": started_at,
+                "finished_at": finished_at,
+            }
+    except HTTPError as exc:
+        finished_at = utc_now_precise()
+        latency_ms = int((time.perf_counter() - start_time) * 1000)
+        raise MenuManifestError(
+            f"Menu manifest returned HTTP {exc.code}: {url}",
+            url,
+            status_code=int(exc.code),
+            latency_ms=latency_ms,
+            started_at=started_at,
+            finished_at=finished_at,
+        ) from exc
+    except (URLError, TimeoutError) as exc:
+        finished_at = utc_now_precise()
+        latency_ms = int((time.perf_counter() - start_time) * 1000)
+        raise MenuManifestError(
+            f"Menu manifest request failed: {url}: {exc}",
+            url,
+            latency_ms=latency_ms,
+            started_at=started_at,
+            finished_at=finished_at,
+        ) from exc
+
+
+def fetch_menu_manifest(slug):
+    candidates = [
+        ("original", f"{MENU_CDN_BASE}/{slug}_uk_manifest.json"),
+        ("v2_2", f"{MENU_CDN_BASE}/v2_2/{slug}_uk_manifest.json"),
+    ]
+    errors = []
+    for source, url in candidates:
+        try:
+            payload, metadata = fetch_menu_manifest_url(url)
+            metadata.update(
+                {
+                    "manifest_source": source,
+                    "manifest_url": url,
+                    "fallback_used": source != "original",
+                    "attempt_errors": "; ".join(errors),
+                }
+            )
+            return payload, metadata
+        except MenuManifestError as exc:
+            errors.append(f"{source}:{exc.status_code or 'error'}")
+            if source == "v2_2":
+                exc.args = (f"{exc} | attempts={'; '.join(errors)}",)
+                raise
+    raise RuntimeError("unreachable")
+
+
+def menu_manifest_result_row(payload, manifest_payload, metadata, fetched_at, outcome, error=None):
+    info = manifest_payload.get("RestaurantInfo") if isinstance(manifest_payload, dict) else {}
+    info = info or {}
+    opening_times = info.get("RestaurantOpeningTimes") or []
+    service_types = sorted(
+        {
+            item.get("ServiceType")
+            for item in opening_times
+            if isinstance(item, dict) and item.get("ServiceType")
+        }
+    )
+    return {
+        "result_id": str(uuid.uuid4()),
+        "task_id": payload["task_id"],
+        "run_id": payload["run_id"],
+        "restaurant_id": str(payload["restaurant_id"]),
+        "restaurant_name": payload.get("restaurant_name"),
+        "restaurant_unique_name": payload["restaurant_unique_name"],
+        "restaurant_url": payload.get("restaurant_url"),
+        "cuisine_names": payload.get("cuisine_names"),
+        "fetched_at": fetched_at.isoformat(),
+        "manifest_source": metadata.get("manifest_source"),
+        "manifest_url": metadata.get("manifest_url"),
+        "http_status": metadata.get("http_status"),
+        "latency_ms": metadata.get("latency_ms"),
+        "fallback_used": metadata.get("fallback_used"),
+        "manifest_restaurant_id": (
+            str(manifest_payload.get("RestaurantId"))
+            if isinstance(manifest_payload, dict) and manifest_payload.get("RestaurantId") is not None
+            else None
+        ),
+        "manifest_name": info.get("Name"),
+        "timezone": info.get("TimeZone"),
+        "is_offline": info.get("IsOffline"),
+        "menu_count": len(manifest_payload.get("Menus") or [])
+        if isinstance(manifest_payload, dict)
+        else None,
+        "items_url": manifest_payload.get("ItemsUrl") if isinstance(manifest_payload, dict) else None,
+        "item_details_url": (
+            manifest_payload.get("ItemDetailsUrl") if isinstance(manifest_payload, dict) else None
+        ),
+        "opening_time_count": sum(
+            len(day.get("Times") or [])
+            for service in opening_times
+            for day in (service.get("TimesPerDay") or [])
+            if isinstance(day, dict)
+        ),
+        "opening_service_types": "|".join(service_types) or None,
+        "outcome": outcome,
+        "error": error,
+    }
+
+
+def time_crosses_midnight(opens_at, closes_at):
+    if not opens_at or not closes_at:
+        return None
+    return str(closes_at) <= str(opens_at)
+
+
+def opening_time_rows(payload, manifest_payload, fetched_at):
+    info = manifest_payload.get("RestaurantInfo") or {}
+    timezone_name = info.get("TimeZone")
+    rows = []
+    for service in info.get("RestaurantOpeningTimes") or []:
+        service_type = service.get("ServiceType")
+        for day in service.get("TimesPerDay") or []:
+            day_of_week = day.get("DayOfWeek")
+            for index, interval in enumerate(day.get("Times") or [], start=1):
+                opens_at = interval.get("FromLocalTime")
+                closes_at = interval.get("ToLocalTime")
+                rows.append(
+                    {
+                        "opening_time_id": str(uuid.uuid4()),
+                        "task_id": payload["task_id"],
+                        "run_id": payload["run_id"],
+                        "restaurant_id": str(payload["restaurant_id"]),
+                        "restaurant_unique_name": payload["restaurant_unique_name"],
+                        "service_type": service_type,
+                        "day_of_week": day_of_week,
+                        "interval_index": index,
+                        "opens_at_local": opens_at,
+                        "closes_at_local": closes_at,
+                        "crosses_midnight": time_crosses_midnight(opens_at, closes_at),
+                        "timezone": timezone_name,
+                        "source": "menu_manifest",
+                        "fetched_at": fetched_at.isoformat(),
+                    }
+                )
+    return rows
+
+
+def insert_menu_manifest_result(client, row):
+    errors = client.insert_rows_json(config.table_id("menu_manifest_results"), [row])
+    if errors:
+        raise RuntimeError(f"BigQuery menu_manifest_results insert errors: {errors[:3]}")
+
+
+def insert_opening_times(client, rows):
+    if not rows:
+        return 0
+    errors = client.insert_rows_json(config.table_id("restaurant_opening_times"), rows)
+    if errors:
+        raise RuntimeError(f"BigQuery restaurant_opening_times insert errors: {errors[:3]}")
+    return len(rows)
+
+
+def menu_manifest_success_exists(client, task_id):
+    query = f"""
+    SELECT 1
+    FROM `{config.table_id("menu_manifest_results")}`
+    WHERE task_id = @task_id
+      AND outcome = 'succeeded'
+    LIMIT 1
+    """
+    job_config = bigquery.QueryJobConfig(
+        query_parameters=[bigquery.ScalarQueryParameter("task_id", "STRING", task_id)]
+    )
+    rows = list(client.query(query, job_config=job_config, location=config.LOCATION).result())
+    return bool(rows)
 
 
 def insert_event(client, payload, event_type, message=None, raw_uri=None, processed_rows=None):
@@ -365,6 +582,112 @@ def insert_snapshots(client, payload, captured_at, snapshot_id, rows):
 @app.get("/")
 def health():
     return jsonify({"ok": True, "service": "delivery-task-worker"})
+
+
+@app.post("/tasks/justeat-menu-manifest")
+def handle_justeat_menu_manifest_task():
+    worker_received_at = utc_now_precise()
+    payload = request.get_json(force=True)
+    required = {
+        "task_id",
+        "run_id",
+        "restaurant_id",
+        "restaurant_unique_name",
+        "scheduled_at",
+    }
+    missing = sorted(required - set(payload))
+    if missing:
+        return jsonify({"ok": False, "error": f"Missing fields: {', '.join(missing)}"}), 400
+
+    bq_client = bigquery.Client(project=config.PROJECT_ID, location=config.LOCATION)
+    storage_client = storage.Client(project=config.PROJECT_ID)
+    payload["restaurant_unique_name"] = str(payload["restaurant_unique_name"]).strip()
+
+    if menu_manifest_success_exists(bq_client, payload["task_id"]):
+        return jsonify({"ok": True, "skipped": "already_succeeded"})
+
+    diagnostic = {
+        "worker_received_at": worker_received_at,
+        "limiter_enabled": env_bool("ENABLE_GLOBAL_MENU_MANIFEST_RATE_LIMIT", True),
+        "limiter_key": os.getenv(
+            "MENU_MANIFEST_RATE_LIMIT_KEY", "justeat-menu-manifest-1000ms"
+        ),
+        "limiter_spacing_ms": int(os.getenv("MENU_MANIFEST_RATE_LIMIT_SPACING_MS", "1000")),
+    }
+
+    fetched_at = utc_now_precise()
+    manifest_payload = {}
+    metadata = {}
+    try:
+        if diagnostic["limiter_enabled"]:
+            diagnostic.update(
+                acquire_global_rate_token(
+                    storage_client,
+                    diagnostic["limiter_key"],
+                    diagnostic["limiter_spacing_ms"],
+                )
+            )
+
+        manifest_payload, metadata = fetch_menu_manifest(payload["restaurant_unique_name"])
+        fetched_at = metadata.get("finished_at") or utc_now_precise()
+        result = menu_manifest_result_row(
+            payload,
+            manifest_payload,
+            metadata,
+            fetched_at,
+            outcome="succeeded",
+        )
+        opening_rows = opening_time_rows(payload, manifest_payload, fetched_at)
+        insert_menu_manifest_result(bq_client, result)
+        inserted_opening_rows = insert_opening_times(bq_client, opening_rows)
+        print(
+            f"menu_manifest succeeded task={payload['task_id']} "
+            f"restaurant_id={payload['restaurant_id']} "
+            f"slug={payload['restaurant_unique_name']} "
+            f"source={metadata.get('manifest_source')} "
+            f"latency_ms={metadata.get('latency_ms')} "
+            f"token_wait_ms={diagnostic.get('limiter_wait_ms')} "
+            f"opening_rows={inserted_opening_rows}",
+            flush=True,
+        )
+        return jsonify(
+            {
+                "ok": True,
+                "manifest_source": metadata.get("manifest_source"),
+                "latency_ms": metadata.get("latency_ms"),
+                "opening_rows": inserted_opening_rows,
+            }
+        )
+    except Exception as exc:
+        if isinstance(exc, MenuManifestError):
+            metadata = {
+                "manifest_url": exc.url,
+                "http_status": exc.status_code,
+                "latency_ms": exc.latency_ms,
+                "manifest_source": None,
+                "fallback_used": True,
+            }
+            fetched_at = exc.finished_at or utc_now_precise()
+        result = menu_manifest_result_row(
+            payload,
+            manifest_payload,
+            metadata,
+            fetched_at,
+            outcome="failed",
+            error=str(exc)[:2000],
+        )
+        try:
+            insert_menu_manifest_result(bq_client, result)
+        except Exception as insert_exc:
+            print(f"menu_manifest failed-result insert error: {insert_exc}", flush=True)
+        print(
+            f"menu_manifest failed task={payload.get('task_id')} "
+            f"restaurant_id={payload.get('restaurant_id')} "
+            f"slug={payload.get('restaurant_unique_name')}: {exc} "
+            f"token_wait_ms={diagnostic.get('limiter_wait_ms')}",
+            flush=True,
+        )
+        return jsonify({"ok": False, "error": str(exc)}), 500
 
 
 @app.post("/tasks/justeat")

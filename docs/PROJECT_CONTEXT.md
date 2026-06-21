@@ -1,6 +1,6 @@
 # Project Context
 
-Last updated: 2026-06-17
+Last updated: 2026-06-21
 
 This file is the handoff memory for new Codex conversations. Read this first, then read `WORKLOG.md` and `NEXT_STEPS.md`.
 
@@ -14,6 +14,7 @@ Current major threads:
 - Avoid Just Eat 429 responses because observed 429 episodes appear to ban the Cloud Run egress IP for about one hour.
 - Reverse engineer Just Eat restaurant menu data sources.
 - Explore an "affordably healthy" restaurant/menu score using scraped menu data.
+- Build a separate menu manifest/opening-times pipeline from `restaurant_profile.restaurant_unique_name`.
 
 ## Repository Map
 
@@ -24,6 +25,8 @@ Important files:
 - `cloud_pipeline/justeat_api.py`: Just Eat postcode API client/parser.
 - `cloud_pipeline/config.py`: Shared GCP and BigQuery config.
 - `cloud_pipeline/run_task_creator_job.py`: Cloud Run Job entrypoint for creating tasks in the cloud.
+- `cloud_pipeline/create_menu_manifest_tasks.py`: Creates Cloud Tasks for restaurant menu manifest jobs.
+- `cloud_pipeline/run_menu_manifest_task_creator_job.py`: Cloud Run Job entrypoint for creating menu manifest tasks from env vars.
 - `cloud_pipeline/setup_tables.py`: BigQuery table setup.
 - `tools/backfill_raw_pairings.py`: Reads saved Just Eat raw `.json.gz` files from GCS and backfills static postcode-restaurant delivery map and restaurant profile tables.
 - `configs/task_creator_weekend_env.yaml`: Weekend full-run task creator environment.
@@ -133,6 +136,75 @@ isDelivery=true
 isOpenNowForDelivery=true
 isTemporarilyOffline=false
 ```
+
+## Menu Manifest / Opening Times Run
+
+The menu manifest pipeline is separate from the postcode snapshot pipeline. It avoids restaurant HTML and uses menu CDN JSON directly.
+
+Primary manifest URL:
+
+```text
+https://menu-globalmenucdn.je-apis.com/{restaurant_unique_name}_uk_manifest.json
+```
+
+Fallback manifest URL:
+
+```text
+https://menu-globalmenucdn.je-apis.com/v2_2/{restaurant_unique_name}_uk_manifest.json
+```
+
+Current menu manifest tables:
+
+- `delivery_availability.menu_manifest_tasks`
+- `delivery_availability.menu_manifest_results`
+- `delivery_availability.restaurant_opening_times`
+
+The worker writes one row per manifest fetch to `menu_manifest_results`. Opening times are normalized to one row per restaurant/service/day/time interval in `restaurant_opening_times`, so restaurants with two opening intervals on one day produce two rows for that day.
+
+Important fields:
+
+- `manifest_source`: `original` or `v2_2`
+- `fallback_used`: whether original failed and `v2_2` was used
+- `opening_time_count`: number of parsed time intervals
+- `is_offline`: manifest-level offline flag
+- `service_type`: usually `delivery` or `collection`
+- `crosses_midnight`: true when `closes_at_local <= opens_at_local`
+
+Validation:
+
+- Local 100-restaurant test on 2026-06-21:
+  - 100/100 HTTP 200
+  - 100/100 original manifest
+  - 0 fallback, 0 403, 0 429
+- Cloud 1000-restaurant test:
+  - run id: `menu-manifest-probe-20260621-1000b`
+  - 1000/1000 succeeded
+  - 999 original manifest, 1 `v2_2` fallback
+  - 0 failed, 0 403, 0 429, 0 5xx
+  - p50 latency: 91 ms
+  - p95 latency: 180 ms
+  - opening-time rows: 12,090
+  - restaurants with opening times: 986/1000
+
+Full manifest run:
+
+- run id: `menu-manifest-full-20260621`
+- Cloud Run worker: `delivery-menu-manifest-worker-probe`
+- Worker URL: `https://delivery-menu-manifest-worker-probe-280046610687.europe-west2.run.app`
+- Cloud Tasks queue: `justeat-menu-manifest-full-20260621`
+- total tasks: 100,850
+- Cloud Tasks rate: `1/s`
+- Cloud Tasks concurrency: `4`
+- worker hard lock: `1000ms`
+- first scheduled: 2026-06-21 21:37:39 Europe/London
+- last scheduled: 2026-06-23 01:38:28 Europe/London
+- expected completion: around 2026-06-23 01:45 Europe/London
+
+Notes:
+
+- `opening_time_count=0` is not equivalent to `is_delivery=false`.
+- In the 1000-test sample, 14 restaurants had no parsed opening times. Of those, 8 had `is_delivery=true` in `postcode_restaurant_delivery_map` and 6 had `is_delivery=false`.
+- Keep `restaurant_profile` clean. Do not add manifest fields there; use `menu_manifest_results` and `restaurant_opening_times`.
 
 ## Weekend Full Run
 

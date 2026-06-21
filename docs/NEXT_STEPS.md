@@ -1,6 +1,6 @@
 # Next Steps
 
-Last updated: 2026-06-17
+Last updated: 2026-06-21
 
 For a new Codex conversation, start with:
 
@@ -10,32 +10,43 @@ Read PROJECT_CONTEXT.md, WORKLOG.md, and NEXT_STEPS.md, then continue from the c
 
 ## Immediate Checks
 
-1. Monitor `temporal-snapshot-20260617`:
+1. Monitor full menu manifest run:
+   - run id: `menu-manifest-full-20260621`
+   - queue: `justeat-menu-manifest-full-20260621`
+   - total tasks: 100,850
+   - expected completion: around 2026-06-23 01:45 Europe/London
+   - check `menu_manifest_results` for:
+     - succeeded/failed counts
+     - HTTP 403/429/5xx
+     - original vs `v2_2` fallback counts
+     - `opening_time_count=0`
+   - check `restaurant_opening_times` row count and distinct restaurant count.
+2. Monitor `temporal-snapshot-20260617`:
    - first active window: `weekday_afternoon`, 2026-06-17 14:00-18:00 Europe/London.
    - use `job_events_temporal_snapshot_202606` and `job_diagnostics_temporal_snapshot_202606`.
    - check started/succeeded/failed/deferred counts.
    - confirm `http_status=200` and no 429.
    - confirm `restaurant_snapshots_temporal_snapshot_202606.planned_window` values are the intended tags.
-2. Validate and document final weekday static map output:
+3. Validate and document final weekday static map output:
    - `postcode_restaurant_delivery_map`: 16,534,508 rows.
    - `restaurant_profile`: 100,850 rows.
    - join sanity check by postcode, e.g. `ls42nh`.
    - compare old open parser counts against the new all-restaurant map.
    - decide how dashboard queries should handle ETA outliers.
-3. Build an enriched BigQuery view for EDA/dashboard use.
-4. Decide whether to backfill the weekend raw data into the same two-table static model.
-5. Fix or investigate manifest status updates:
+4. Build an enriched BigQuery view for EDA/dashboard use.
+5. Decide whether to backfill the weekend raw data into the same two-table static model.
+6. Fix or investigate manifest status updates:
    - `weekday-full-20260519` has all jobs succeeded in `job_events`/`job_diagnostics`, but `job_manifest_weekday_full.status` stayed `pending`.
    - Until fixed, use events/diagnostics as completion truth.
-6. Decide whether to standardize production Just Eat rate settings at:
+7. Decide whether to standardize production Just Eat rate settings at:
    - Cloud Tasks `1/s`
    - concurrency `4`
    - worker global limiter spacing `1300ms`
    - 429 ban circuit `3600s`
-7. Query/export final comparison summary for:
+8. Query/export final comparison summary for:
    - `weekend-full-20260516`
    - `weekday-full-20260519`
-8. Decide whether to retry the 7 weekend postcodes that failed during the 2026-05-16 429 ban period.
+9. Decide whether to retry the 7 weekend postcodes that failed during the 2026-05-16 429 ban period.
 
 ## Static Map Backfill
 
@@ -86,38 +97,45 @@ USING (restaurant_id)
 
 ## Menu Pipeline Design
 
-Design a separate restaurant menu scraping pipeline based on unique restaurant URLs/ids from `restaurant_snapshots_weekend_full`.
+Current state: the manifest/opening-times layer is now implemented and the full run is active. The next menu work should build on `restaurant_profile.restaurant_unique_name`, `menu_manifest_results`, and `restaurant_opening_times`.
 
-Suggested approach:
+Current manifest approach:
 
 1. Deduplicate restaurants by Just Eat restaurant id and URL.
-2. For each restaurant:
-   - fetch restaurant menu page HTML
-   - parse `__NEXT_DATA__`
-   - fetch CDN `itemsUrl`
-   - fetch CDN `itemDetailsUrl`
-   - store raw JSON in GCS
-   - write normalized tables to BigQuery
-3. Track failures with source status:
-   - `cdn_items_url`
-   - `inline_next_data`
-   - `menu_unresolved`
+2. Fetch CDN manifest directly:
+   - `{restaurant_unique_name}_uk_manifest.json`
+   - fallback `v2_2/{restaurant_unique_name}_uk_manifest.json`
+3. Write:
+   - `menu_manifest_results`
+   - `restaurant_opening_times`
+4. Do not fetch restaurant HTML unless CDN/API routes fail.
+
+Next menu-items phase:
+
+1. Use `menu_manifest_results.items_url`.
+2. Exclude grocery/convenience stores from item scraping if product-level grocery data is not needed.
+3. Fetch `items.json` only for non-grocery restaurants.
+4. Defer `itemDetails.json` / modifier groups until needed.
+5. Track failures with source status:
+   - `manifest_missing_items_url`
+   - `cdn_items_url_failed`
+   - `items_parsed`
 
 Potential normalized menu tables:
 
 - `restaurant_menu_manifest`
 - `restaurant_menu_items`
 - `restaurant_menu_variations`
-- `restaurant_menu_modifier_groups`
-- `restaurant_menu_modifier_options`
-- `restaurant_menu_deal_groups`
-- `restaurant_menu_deal_options`
+- `restaurant_menu_modifier_groups` later
+- `restaurant_menu_modifier_options` later
+- `restaurant_menu_deal_groups` later
+- `restaurant_menu_deal_options` later
 
 ## Rate Limit Caution
 
-- Menu CDN looks less risky than postcode availability API, but test before full scale.
-- Start with a small sample, for example 100 unique restaurants.
-- Keep rate conservative at first.
+- Menu CDN manifest has passed local 100 and cloud 1000 tests at `1/s` with 0 failures/429.
+- Full manifest run is using `1/s`, concurrency `4`, worker hard lock `1000ms`.
+- Continue monitoring HTTP 403/429/5xx before increasing rate.
 - Watch for HTTP 403/429 from:
   - `www.just-eat.co.uk`
   - `menu-globalmenucdn.je-apis.com`

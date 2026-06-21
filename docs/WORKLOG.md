@@ -1,5 +1,63 @@
 # Worklog
 
+## 2026-06-21
+
+### Done
+
+- Added a separate Just Eat menu manifest pipeline that avoids restaurant HTML:
+  - endpoint: `/tasks/justeat-menu-manifest`
+  - source: `https://menu-globalmenucdn.je-apis.com/{restaurant_unique_name}_uk_manifest.json`
+  - fallback: `https://menu-globalmenucdn.je-apis.com/v2_2/{restaurant_unique_name}_uk_manifest.json`
+- Added BigQuery table schemas for:
+  - `menu_manifest_tasks`
+  - `menu_manifest_results`
+  - `restaurant_opening_times`
+- Added task creation tooling:
+  - `cloud_pipeline/create_menu_manifest_tasks.py`
+  - `cloud_pipeline/run_menu_manifest_task_creator_job.py`
+- Deployed isolated menu manifest worker:
+  - service: `delivery-menu-manifest-worker-probe`
+  - URL: `https://delivery-menu-manifest-worker-probe-280046610687.europe-west2.run.app`
+  - limiter key: `justeat-menu-manifest-probe-20260621-1000ms`
+  - limiter spacing: `1000ms`
+- Ran local 100-restaurant manifest-only probe:
+  - output: `data/output/menu_manifest_1s_probe_100_20260621.csv`
+  - 100/100 HTTP 200
+  - 100/100 original manifest
+  - 0 fallback, 0 403, 0 429
+  - p50 latency: 79 ms
+  - p95 latency: 137 ms
+- Ran cloud 1000-restaurant manifest-only probe:
+  - run id: `menu-manifest-probe-20260621-1000b`
+  - queue: `justeat-menu-manifest-probe-20260621`
+  - 1000/1000 succeeded
+  - 999 original manifest, 1 `v2_2` fallback
+  - 0 failed, 0 403, 0 429, 0 5xx
+  - p50 latency: 91 ms
+  - p95 latency: 180 ms
+  - max latency: 419 ms
+  - `restaurant_opening_times` rows: 12,090
+  - restaurants with opening times: 986/1000
+- Checked the 14 restaurants with `opening_time_count=0`:
+  - 8 had `is_delivery=true` in `postcode_restaurant_delivery_map`
+  - 6 had `is_delivery=false`
+  - conclusion: missing manifest opening times should be tracked separately and must not be treated as equivalent to `is_delivery=false`.
+- Started full menu manifest run:
+  - run id: `menu-manifest-full-20260621`
+  - queue: `justeat-menu-manifest-full-20260621`
+  - total restaurants/tasks: 100,850
+  - Cloud Tasks rate: `1/s`
+  - Cloud Tasks concurrency: `4`
+  - worker hard lock: `1000ms`
+  - first scheduled: 2026-06-21 21:37:39 Europe/London
+  - last scheduled: 2026-06-23 01:38:28 Europe/London
+  - expected completion: around 2026-06-23 01:45 Europe/London, allowing a few minutes for dispatch/write overhead
+- Early full-run check:
+  - first 241 results succeeded
+  - all HTTP 200 original manifest
+  - p50 latency: 86 ms
+  - p95 latency: 171 ms
+
 ## 2026-06-17
 
 ### Done

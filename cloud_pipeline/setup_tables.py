@@ -7,7 +7,10 @@ from cloud_pipeline.schema import (
     JOB_DIAGNOSTICS_SCHEMA,
     JOB_EVENTS_SCHEMA,
     JOB_MANIFEST_SCHEMA,
+    MENU_MANIFEST_RESULTS_SCHEMA,
+    MENU_MANIFEST_TASKS_SCHEMA,
     RESTAURANT_SNAPSHOTS_SCHEMA,
+    RESTAURANT_OPENING_TIMES_SCHEMA,
     SCRAPE_JOBS_SCHEMA,
 )
 
@@ -58,6 +61,24 @@ def main():
         config.SNAPSHOTS_TABLE,
         RESTAURANT_SNAPSHOTS_SCHEMA,
         partition_field="captured_at",
+    )
+    ensure_table(
+        client,
+        "menu_manifest_tasks",
+        MENU_MANIFEST_TASKS_SCHEMA,
+        partition_field="scheduled_at",
+    )
+    ensure_table(
+        client,
+        "menu_manifest_results",
+        MENU_MANIFEST_RESULTS_SCHEMA,
+        partition_field="fetched_at",
+    )
+    ensure_table(
+        client,
+        "restaurant_opening_times",
+        RESTAURANT_OPENING_TIMES_SCHEMA,
+        partition_field="fetched_at",
     )
     print(f"Dataset ready: {config.PROJECT_ID}.{config.DATASET_ID}")
     print(f"Table ready: {config.table_id(config.JOBS_TABLE)}")
