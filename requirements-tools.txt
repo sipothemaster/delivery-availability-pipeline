@@ -3,3 +3,6 @@ beautifulsoup4
 pandas
 openpyxl
 playwright
+google-cloud-bigquery
+google-cloud-bigquery-storage
+pyarrow

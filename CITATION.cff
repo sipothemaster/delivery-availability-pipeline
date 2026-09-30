@@ -1,0 +1,21 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite the specific released version."
+title: "Delivery Availability Pipeline"
+type: software
+authors:
+  - family-names: "Xiao"
+    given-names: "Chenrui"
+    affiliation: "Leeds Institute for Data Analytics, University of Leeds"
+abstract: >-
+  A cloud pipeline for responsibly collecting and structuring postcode-level
+  food-delivery availability observations for academic research.
+keywords:
+  - food delivery
+  - spatial accessibility
+  - web data collection
+  - research software
+  - Google Cloud
+  - reproducible research
+license: MIT
+repository-code: "https://github.com/sipothemaster/delivery-availability-pipeline"
+version: "1.0.0"

@@ -8,12 +8,20 @@ data/
 *.csv
 *.xlsx
 *.json.gz
+*.parquet
+*.log
+*.pem
+*.p12
 
 *.key.json
 *service-account*.json
 *credentials*.json
 .env
+.env.*
+credentials/
+secrets/
+terraform.tfstate
+terraform.tfstate.*
 
 .pytest_cache/
 .mypy_cache/
-

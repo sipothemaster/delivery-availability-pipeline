@@ -25,7 +25,7 @@ app = Flask(__name__)
 MENU_CDN_BASE = "https://menu-globalmenucdn.je-apis.com"
 MENU_USER_AGENT = (
     "DFRE-DeliveryAvailabilityResearch/1.0 "
-    "(menu manifest checker; contact: research-contact@example.com)"
+    "(+https://github.com/sipothemaster/delivery-availability-pipeline)"
 )
 
 

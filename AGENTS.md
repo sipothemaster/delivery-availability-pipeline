@@ -83,13 +83,10 @@ Core ownership:
   schemas and table provisioning.
 - `cloud_pipeline/config.py`: shared GCP resource configuration.
 
-Default cloud resources documented by this project:
-
-- GCP project: `delivery-availability-research`
-- region/location: `europe-west2`
-- GCS bucket: `delivery-availability-research-data-sipo`
-- BigQuery dataset: `delivery_availability`
-- Artifact Registry repository: `delivery-pipeline`
+Cloud resource identities are deployment-specific and must come from environment
+variables or private deployment configuration. Do not add real project ids,
+bucket names, service URLs, service-account emails, or local absolute paths to
+tracked files.
 
 Do not assume names, deployed revisions, queue settings, or row counts remain
 current solely because they appear in a dated document.

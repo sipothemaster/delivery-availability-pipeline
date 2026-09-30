@@ -10,7 +10,7 @@ BASE_URL = "https://www.just-eat.co.uk"
 JUST_EAT_API_URL = "https://uk.api.just-eat.io"
 USER_AGENT = (
     "DFRE-DeliveryAvailabilityResearch/1.0 "
-    "(restaurant listing checker; contact: research-contact@example.com)"
+    "(+https://github.com/sipothemaster/delivery-availability-pipeline)"
 )
 
 

@@ -1,156 +1,170 @@
 # Delivery Availability Pipeline
 
-Cloud pipeline for collecting UK delivery availability data, starting with Just Eat.
+Research software for collecting and structuring postcode-level food-delivery
+availability data. The current implementation targets Just Eat and runs on
+Google Cloud using Cloud Run, Cloud Tasks, Cloud Storage, and BigQuery.
 
-The production path is:
+This repository publishes the software and research method only. It does not
+contain, distribute, or provide access to collected Just Eat data.
+
+## Architecture
 
 ```text
-Cloud Run Job task creator
+Cloud Run task-creator job
   -> Cloud Tasks queue
-    -> Cloud Run worker
-      -> provider API
-        -> GCS raw JSON
-        -> BigQuery tables
+    -> authenticated Cloud Run worker
+      -> public provider endpoint
+        -> compressed raw response in private Cloud Storage
+        -> operational and parsed records in private BigQuery tables
 ```
 
-## What Is Included
+The task creator assigns deterministic jobs to bounded collection windows. The
+worker applies a shared request-start limiter before contacting the upstream
+service, records request diagnostics, stores the source response privately, and
+normalises selected fields for analysis.
 
-- `cloud_pipeline/`: production Cloud Tasks and Cloud Run pipeline.
-- `configs/`: historical Cloud Run Job environment files for full weekday/weekend runs.
-- `docs/`: project memory and operational notes.
-- `tools/export_full_postcodes.py`: helper for rebuilding the full postcode input CSV.
-- `research/justeat_api_reverse/`: scripts that document the Just Eat API reverse-engineering process.
-- `research/justeat_menu_reverse/`: scripts and notes for Just Eat menu reverse engineering.
+## Responsible Collection
 
-Old grocery scrapers, local sqlite workers, and one-off test outputs are intentionally not included in the production path. The Just Eat browser/API probes are preserved under `research/`.
+The software was designed for bounded academic research rather than unrestricted
+crawling. Its safeguards include:
 
-## Core Files
+- small local and isolated cloud tests before full runs;
+- bounded task sets and explicit collection windows;
+- queue-level dispatch and concurrency controls;
+- a worker-level global request-start interval shared across instances;
+- a one-hour circuit break after an HTTP 429 response;
+- recorded status, latency, scheduling, and limiter diagnostics;
+- no account login, CAPTCHA bypass, proxy rotation, or access-control evasion;
+- collection from public endpoints only; and
+- private handling of raw responses and derived research data.
 
-- `cloud_pipeline/task_worker_service.py`: Flask worker endpoint for Cloud Tasks.
-- `cloud_pipeline/justeat_api.py`: Just Eat listing API client and parser.
-- `cloud_pipeline/create_tasks_cloud.py`: Cloud Tasks creator.
-- `cloud_pipeline/run_task_creator_job.py`: Cloud Run Job entrypoint for task creation.
-- `cloud_pipeline/schema.py`: BigQuery schemas.
-- `cloud_pipeline/setup_tables.py`: BigQuery table setup.
-- `Dockerfile.tasks`: Cloud Run worker image.
-- `cloudbuild.tasks.yaml`: Cloud Build config for the worker image.
+These controls do not by themselves establish legal permission for every use.
+Operators must review the target service's current terms, robots guidance,
+institutional approvals, and applicable law before collecting data. See
+[Responsible data collection](docs/ETHICAL_DATA_COLLECTION.md) for the full
+protocol and limitations.
 
-## Research And Tools
+## Data Model
 
-The production pipeline does not import anything under `research/` or `tools/`.
-These files are kept for reproducibility and future reverse engineering.
+The pipeline can produce four analytical entities:
 
-- `research/justeat_api_reverse/Inspect_JustEat_Page.py`
-  - inspected embedded page scripts and `__NEXT_DATA__`.
-- `research/justeat_api_reverse/Inspect_JustEat_NextData.py`
-  - walked `__NEXT_DATA__` to find restaurant-like payloads and API config.
-- `research/justeat_api_reverse/Search_JustEat_Chunks.py`
-  - searched Next.js bundles for API keywords.
-- `research/justeat_api_reverse/Probe_JustEat_API.py`
-  - captured browser network responses.
-- `research/justeat_api_reverse/Test_JustEat_Internal_API.py`
-  - tested API endpoint candidates.
-- `research/justeat_api_reverse/Scrape_JustEat.py`
-  - older combined browser/API scraper that preceded the production client.
-- `research/justeat_api_reverse/Benchmark_JustEat.py`
-  - browser loading benchmark retained for historical context.
-- `research/justeat_menu_reverse/reverse_justeat_menu.py`
-  - menu HTML/CDN extraction tool.
-- `tools/export_full_postcodes.py`
-  - postcode input reconstruction helper.
+| Entity | Grain | Purpose |
+| --- | --- | --- |
+| Static coverage | postcode x restaurant | Recorded delivery coverage and selected delivery attributes |
+| Restaurant profile | restaurant | Stable restaurant identity, location, cuisine, rating, and platform URL |
+| Opening schedule | restaurant x service x day x interval | Normalised delivery or collection opening intervals |
+| Observed availability | postcode x window x restaurant | Restaurants observed as open for delivery during a collection window |
 
-Install local research/tool dependencies separately:
+Operational manifests, events, diagnostics, and private raw responses support
+provenance and reprocessing but are not research data releases. See the
+[data model](docs/DATA_MODEL.md) for keys, field semantics, and limitations.
+
+## Repository Layout
+
+- `cloud_pipeline/`: production task creation, worker, parsing, and schemas.
+- `configs/`: redacted example task-creator configurations.
+- `research/justeat_api_reverse/`: documented listing API discovery process.
+- `research/justeat_menu_reverse/`: documented menu-manifest investigation.
+- `tools/`: private-data backfill and export utilities; no data are included.
+- `docs/`: methods, data model, governance, and project documentation.
+
+Production modules do not import from `research/` or `tools/`.
+
+## Installation
+
+Create a Python environment and install the production dependencies:
 
 ```powershell
-pip install -r requirements-tools.txt
-playwright install chromium
+python -m venv .venv
+.\.venv\Scripts\python.exe -m pip install -r requirements-cloud.txt
 ```
 
-## Environment
+Install optional research and export dependencies separately:
 
-The pipeline is configured through environment variables:
+```powershell
+.\.venv\Scripts\python.exe -m pip install -r requirements-tools.txt
+.\.venv\Scripts\playwright.exe install chromium
+```
+
+## Configuration
+
+Real cloud identifiers belong in deployment-time environment variables or a
+private configuration store, never in tracked files.
+
+Required deployment settings include:
 
 ```text
 GCP_PROJECT_ID
 GCS_BUCKET_NAME
 BQ_DATASET_ID
 GCP_LOCATION
-BQ_TABLE_SUFFIX
+POSTCODE_FILE
+TASK_WORKER_SERVICE_URL
+TASK_QUEUE_ID
+OIDC_SERVICE_ACCOUNT_EMAIL
 ```
 
-Worker rate-limit controls:
+Recommended postcode endpoint safety settings are:
 
 ```text
 ENABLE_GLOBAL_JUSTEAT_RATE_LIMIT=true
 JUSTEAT_RATE_LIMIT_SPACING_MS=1300
 JUSTEAT_RATE_LIMIT_START_GUARD_MS=1000
-JUSTEAT_RATE_LIMIT_KEY=justeat-production-1300ms
 ENABLE_JUSTEAT_429_BAN_CIRCUIT=true
-JUSTEAT_BAN_KEY=justeat-production-1300ms
 JUSTEAT_BAN_SECONDS=3600
 ```
 
-## Build
+Limiter and ban keys should be deployment-specific and must not contain secrets.
+Do not treat these historical research settings as permission to collect from
+the service or as a guaranteed universally safe request rate.
+
+## Build And Deploy
+
+Build the worker image with redacted substitutions:
 
 ```powershell
-gcloud.cmd builds submit --config cloudbuild.tasks.yaml --project delivery-availability-research
+gcloud builds submit `
+  --config cloudbuild.tasks.yaml `
+  --project YOUR_GCP_PROJECT_ID `
+  --substitutions _REGION=europe-west2,_ARTIFACT_REPOSITORY=YOUR_REPOSITORY,_IMAGE_NAME=YOUR_IMAGE,_IMAGE_TAG=latest
 ```
 
-## Deploy Worker
+Deployment requires a private environment configuration based on the examples
+under `configs/`. The Cloud Run worker should require authentication, and the
+task-calling service account should receive only the minimum invocation and data
+permissions needed for the selected workflow.
 
-```powershell
-gcloud.cmd run deploy delivery-task-worker `
-  --image europe-west2-docker.pkg.dev/delivery-availability-research/delivery-pipeline/delivery-task-worker:latest `
-  --region europe-west2 `
-  --project delivery-availability-research `
-  --no-allow-unauthenticated
-```
+No deployment command in this repository creates a complete production
+environment automatically. Review IAM, storage retention, budget controls,
+queue limits, and upstream collection approval before running it.
 
-Grant Cloud Tasks caller permission:
+## Reproducibility
 
-```powershell
-gcloud.cmd run services add-iam-policy-binding delivery-task-worker `
-  --region=europe-west2 `
-  --project=delivery-availability-research `
-  --member=serviceAccount:scheduler-runner@delivery-availability-research.iam.gserviceaccount.com `
-  --role=roles/run.invoker
-```
+The reverse-engineering history is retained because the production API client
+was derived through browser network inspection and controlled endpoint probes.
+The process and the transition from browser automation to direct structured
+requests are described in [Methods](docs/METHODS.md).
 
-## Create Tables
+Generated CSV, Parquet, JSON, logs, credentials, browser profiles, and cloud
+configuration values are excluded from version control. The repository contains
+no public data release; see [Data availability](docs/DATA_AVAILABILITY.md).
 
-```powershell
-$env:BQ_TABLE_SUFFIX = "_example"
-.\.venv\Scripts\python.exe -m cloud_pipeline.setup_tables
-```
+## Citation
 
-## Create Tasks
+Citation metadata are provided in [`CITATION.cff`](CITATION.cff). GitHub can
+render these metadata through its **Cite this repository** interface. Cite the
+specific released software version used in an analysis. A Zenodo DOI will be
+added to the citation file after the first archived release. The release process
+is documented in [Releasing and citation](docs/RELEASING.md).
 
-For large runs, use the Cloud Run Job entrypoint:
+## Contributing And Security
 
-```powershell
-python -m cloud_pipeline.run_task_creator_job
-```
+See [CONTRIBUTING.md](CONTRIBUTING.md) before proposing changes. Report security
+issues according to [SECURITY.md](SECURITY.md) and do not open public issues that
+contain credentials, signed URLs, private data, or cloud resource identifiers.
 
-Or call the task creator directly:
+## License
 
-```powershell
-python -m cloud_pipeline.create_tasks_cloud `
-  --postcode-file gs://delivery-availability-research-data-sipo/input/postcodes_full.csv `
-  --service-url https://YOUR-WORKER-URL `
-  --queue-id delivery-scrape-example `
-  --windows weekday `
-  --daily-start-date 2026-05-19 `
-  --daily-days 2 `
-  --daily-local-start-time 12:00 `
-  --daily-local-end-time 20:00 `
-  --run-id weekday-full-YYYYMMDD `
-  --skip-existing
-```
-
-## Documentation
-
-Start with:
-
-- `docs/PROJECT_CONTEXT.md`
-- `docs/WORKLOG.md`
-- `docs/NEXT_STEPS.md`
+The software is released under the [MIT License](LICENSE). This license covers
+the source code in this repository, not third-party website content or data
+collected with the software.

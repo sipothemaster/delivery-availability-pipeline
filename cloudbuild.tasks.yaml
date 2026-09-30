@@ -5,7 +5,12 @@ steps:
       - "-f"
       - "Dockerfile.tasks"
       - "-t"
-      - "europe-west2-docker.pkg.dev/delivery-availability-research/delivery-pipeline/delivery-task-worker:latest"
+      - "${_REGION}-docker.pkg.dev/$PROJECT_ID/${_ARTIFACT_REPOSITORY}/${_IMAGE_NAME}:${_IMAGE_TAG}"
       - "."
 images:
-  - "europe-west2-docker.pkg.dev/delivery-availability-research/delivery-pipeline/delivery-task-worker:latest"
+  - "${_REGION}-docker.pkg.dev/$PROJECT_ID/${_ARTIFACT_REPOSITORY}/${_IMAGE_NAME}:${_IMAGE_TAG}"
+substitutions:
+  _REGION: "europe-west2"
+  _ARTIFACT_REPOSITORY: "delivery-pipeline"
+  _IMAGE_NAME: "delivery-task-worker"
+  _IMAGE_TAG: "latest"

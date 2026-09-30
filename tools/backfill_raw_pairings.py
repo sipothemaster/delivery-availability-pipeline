@@ -1,18 +1,19 @@
 import argparse
 import gzip
 import json
+import os
 import re
 from datetime import datetime, timezone
 
 from google.cloud import bigquery, storage
 
 
-DEFAULT_PROJECT_ID = "delivery-availability-research"
+DEFAULT_PROJECT_ID = os.getenv("GCP_PROJECT_ID") or os.getenv("GOOGLE_CLOUD_PROJECT")
 DEFAULT_DATASET_ID = "delivery_availability"
 DEFAULT_LOCATION = "europe-west2"
-DEFAULT_MAP_TABLE = "postcode_restaurant_delivery_map_test"
-DEFAULT_PROFILE_TABLE = "restaurant_profile_test"
-DEFAULT_SNAPSHOT_LABEL = "weekday_full_20260520"
+DEFAULT_MAP_TABLE = "example_delivery_map"
+DEFAULT_PROFILE_TABLE = "example_restaurant_profile"
+DEFAULT_SNAPSHOT_LABEL = "example_snapshot"
 JUSTEAT_BASE_URL = "https://www.just-eat.co.uk"
 
 
@@ -264,7 +265,10 @@ def parse_args():
         action="store_true",
         help="Parse and print counts without creating tables or writing rows.",
     )
-    return parser.parse_args()
+    args = parser.parse_args()
+    if not args.project_id:
+        parser.error("Set GCP_PROJECT_ID or pass --project-id.")
+    return args
 
 
 def main():

@@ -14,6 +14,11 @@ def main():
     args = []
     add_arg(args, "--postcode-file", os.environ["POSTCODE_FILE"])
     add_arg(args, "--service-url", os.environ["TASK_WORKER_SERVICE_URL"])
+    add_arg(
+        args,
+        "--oidc-service-account-email",
+        os.environ["OIDC_SERVICE_ACCOUNT_EMAIL"],
+    )
     add_arg(args, "--queue-id", os.getenv("TASK_QUEUE_ID", "delivery-scrape-tasks"))
     add_arg(args, "--max-dispatches-per-second", os.getenv("MAX_DISPATCHES_PER_SECOND", "0.8"))
     add_arg(args, "--max-concurrent-dispatches", os.getenv("MAX_CONCURRENT_DISPATCHES", "2"))

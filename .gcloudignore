@@ -6,10 +6,19 @@ data/
 *.csv
 *.xlsx
 *.json.gz
+*.parquet
+*.log
+*.pem
+*.p12
 *.key.json
 *service-account*.json
 *credentials*.json
 .env
+.env.*
+credentials/
+secrets/
+terraform.tfstate
+terraform.tfstate.*
 
 # Keep only the files needed to build the Cloud Run worker image.
 !Dockerfile.tasks

@@ -434,9 +434,7 @@ def parse_args():
     parser.add_argument("--service-url", required=True)
     parser.add_argument(
         "--oidc-service-account-email",
-        default=(
-            "scheduler-runner@delivery-availability-research.iam.gserviceaccount.com"
-        ),
+        required=True,
     )
     parser.add_argument("--max-dispatches-per-second", type=float, default=1.1)
     parser.add_argument("--max-concurrent-dispatches", type=int, default=2)
