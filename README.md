@@ -18,31 +18,20 @@ Cloud Run task-creator job
         -> operational and parsed records in private BigQuery tables
 ```
 
-The task creator assigns deterministic jobs to bounded collection windows. The
-worker applies a shared request-start limiter before contacting the upstream
-service, records request diagnostics, stores the source response privately, and
-normalises selected fields for analysis.
+The task creator assigns deterministic jobs to bounded collection windows. The worker applies a shared request-start limiter before contacting the upstream service, records request diagnostics, stores the source response privately, and normalises selected fields for analysis.
 
 ## Responsible Collection
 
-The software was designed for bounded academic research rather than unrestricted
-crawling. Its safeguards include:
+The software was designed for bounded academic research rather than unrestricted crawling. Traffic control is deliberately layered:
 
-- small local and isolated cloud tests before full runs;
-- bounded task sets and explicit collection windows;
-- queue-level dispatch and concurrency controls;
-- a worker-level global request-start interval shared across instances;
-- a one-hour circuit break after an HTTP 429 response;
-- recorded status, latency, scheduling, and limiter diagnostics;
-- no account login, CAPTCHA bypass, proxy rotation, or access-control evasion;
-- collection from public endpoints only; and
-- private handling of raw responses and derived research data.
+1. **Workload shaping:** a finite postcode list is deterministically distributed across explicit collection windows.
+2. **Cloud Tasks pacing:** scheduled delivery, a bounded dispatch rate, concurrency limits, and retry backoff control traffic entering Cloud Run.
+3. **Global hard lock:** all Cloud Run instances reserve provider request-start slots through shared Cloud Storage state. For the established postcode configuration, reserved starts are separated by at least `1300 ms`, even when task delivery, cold starts, database work, and network latency fluctuate.
+4. **429 circuit breaker:** one observed HTTP 429 sets shared state that defers new provider requests for `3600 seconds`.
 
-These controls do not by themselves establish legal permission for every use.
-Operators must review the target service's current terms, robots guidance,
-institutional approvals, and applicable law before collecting data. See
-[Responsible data collection](docs/ETHICAL_DATA_COLLECTION.md) for the full
-protocol and limitations.
+Cloud Tasks is not treated as the final API limiter: it controls delivery to workers, while the global hard lock controls provider request starts. The software also records millisecond-level scheduling, lock, request, status, and latency evidence so these safeguards can be audited after a run.
+
+The project does not use account login, CAPTCHA bypass, proxy rotation, or access-control evasion. Raw responses and derived research data remain private. These controls do not by themselves establish legal permission for every use; operators must review current terms, robots guidance, institutional approvals, and applicable law. See [Responsible data collection](docs/ETHICAL_DATA_COLLECTION.md) for the full design, diagrams, limitations, and pre-run checklist.
 
 ## Data Model
 

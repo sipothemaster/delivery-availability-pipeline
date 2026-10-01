@@ -4,6 +4,12 @@ This worklog records reproducible software milestones. Private deployment names,
 cloud identifiers, local paths, and collected data locations are intentionally
 excluded.
 
+## 2026-10-01
+
+- Reworked the responsible-collection documentation around a four-layer traffic-control model: bounded window assignment, Cloud Tasks pacing, a cross-instance global request-start hard lock, and a shared HTTP 429 circuit breaker.
+- Added flow and sequence diagrams, exact limiter reservation semantics, retry containment, monitoring evidence, limitations, and pre-run checklists.
+- Made the postcode global limiter and 429 circuit breaker enabled by default, and aligned direct task-creator queue defaults with the documented `1 task/second` and concurrency `4` configuration.
+
 ## 2026-09-30
 
 - Prepared the repository for an open research-software release.

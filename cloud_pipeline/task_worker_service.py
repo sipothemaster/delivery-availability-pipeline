@@ -704,11 +704,11 @@ def handle_justeat_task():
     payload["postcode"] = clean_postcode(payload["postcode"])
     diagnostic = {
         "worker_received_at": worker_received_at,
-        "limiter_enabled": env_bool("ENABLE_GLOBAL_JUSTEAT_RATE_LIMIT", False),
+        "limiter_enabled": env_bool("ENABLE_GLOBAL_JUSTEAT_RATE_LIMIT", True),
         "limiter_key": os.getenv("JUSTEAT_RATE_LIMIT_KEY", "justeat-api-global"),
         "limiter_spacing_ms": int(os.getenv("JUSTEAT_RATE_LIMIT_SPACING_MS", "1300")),
     }
-    ban_enabled = env_bool("ENABLE_JUSTEAT_429_BAN_CIRCUIT", False)
+    ban_enabled = env_bool("ENABLE_JUSTEAT_429_BAN_CIRCUIT", True)
     ban_key = os.getenv("JUSTEAT_BAN_KEY", diagnostic["limiter_key"])
     ban_seconds = int(os.getenv("JUSTEAT_BAN_SECONDS", "3600"))
 

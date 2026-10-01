@@ -436,8 +436,8 @@ def parse_args():
         "--oidc-service-account-email",
         required=True,
     )
-    parser.add_argument("--max-dispatches-per-second", type=float, default=1.1)
-    parser.add_argument("--max-concurrent-dispatches", type=int, default=2)
+    parser.add_argument("--max-dispatches-per-second", type=float, default=1.0)
+    parser.add_argument("--max-concurrent-dispatches", type=int, default=4)
     parser.add_argument(
         "--skip-queue-setup",
         action="store_true",
