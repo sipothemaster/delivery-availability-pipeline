@@ -7,7 +7,7 @@ excluded.
 ## 2026-10-01
 
 - Reworked the responsible-collection documentation around a four-layer traffic-control model: bounded window assignment, Cloud Tasks pacing, a cross-instance global request-start hard lock, and a shared HTTP 429 circuit breaker.
-- Added flow and sequence diagrams, exact limiter reservation semantics, retry containment, monitoring evidence, limitations, and pre-run checklists.
+- Added exact limiter reservation semantics, retry containment, monitoring evidence, limitations, and a simplified request sequence diagram.
 - Made the postcode global limiter and 429 circuit breaker enabled by default, and aligned direct task-creator queue defaults with the documented `1 task/second` and concurrency `4` configuration.
 
 ## 2026-09-30

@@ -31,7 +31,7 @@ The software was designed for bounded academic research rather than unrestricted
 
 Cloud Tasks is not treated as the final API limiter: it controls delivery to workers, while the global hard lock controls provider request starts. The software also records millisecond-level scheduling, lock, request, status, and latency evidence so these safeguards can be audited after a run.
 
-The project does not use account login, CAPTCHA bypass, proxy rotation, or access-control evasion. Raw responses and derived research data remain private. These controls do not by themselves establish legal permission for every use; operators must review current terms, robots guidance, institutional approvals, and applicable law. See [Responsible data collection](docs/ETHICAL_DATA_COLLECTION.md) for the full design, diagrams, limitations, and pre-run checklist.
+The project does not use account login, CAPTCHA bypass, proxy rotation, or access-control evasion. Raw responses and derived research data remain private. These controls do not by themselves establish legal permission for every use; operators must review current terms, robots guidance, institutional approvals, and applicable law. See [Responsible data collection](docs/ETHICAL_DATA_COLLECTION.md) for the full design, diagram, and limitations.
 
 ## Data Model
 
