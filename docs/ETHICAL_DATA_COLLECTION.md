@@ -26,21 +26,6 @@ The design addresses five specific risks:
 
 No single component is treated as sufficient. Four independent layers reduce traffic risk before a provider request is made.
 
-```mermaid
-flowchart LR
-    A[Bounded postcode input] --> B[Deterministic window assignment]
-    B --> C[Cloud Tasks scheduled_at]
-    C --> D[Queue dispatch rate and concurrency]
-    D --> E[Authenticated Cloud Run workers]
-    E --> F{429 circuit active?}
-    F -- Yes --> G[Defer without provider request]
-    F -- No --> H[Acquire global start slot]
-    H --> I[Wait until reserved time]
-    I --> J[One upstream request]
-    J --> K[Private raw response and diagnostics]
-    J -- HTTP 429 --> L[Set shared one-hour circuit]
-```
-
 | Layer | Control | Primary purpose |
 | --- | --- | --- |
 | 1 | Bounded inputs and explicit time windows | Prevent an unbounded or accidental collection |
@@ -180,28 +165,18 @@ sequenceDiagram
 
     Q->>W: Authenticated task delivery
     W->>B: Validate manifest and prior success
-    alt Already succeeded or max attempts reached
-        W-->>Q: Acknowledge without provider request
-    else Eligible task
-        W->>S: Check shared 429 circuit
-        alt Circuit active
-            W->>B: Record deferred event and diagnostic
-            W-->>Q: Retryable response
-        else Circuit clear
-            W->>S: Atomically reserve global start slot
-            W->>W: Wait until reserved time
-            W->>P: One structured request
-            alt HTTP 429
-                W->>S: Set shared one-hour circuit
-                W->>B: Record failure diagnostic
-                W-->>Q: Retryable failure
-            else Success
-                W->>S: Store compressed raw response privately
-                W->>B: Store parsed rows, event, and diagnostic
-                W-->>Q: Success
-            end
-        end
-    end
+    Note over W,Q: Duplicate, completed, or exhausted jobs stop here without a provider request
+    W->>S: Check shared 429 circuit
+    Note over W,S: An active circuit records a deferral and returns a retryable response
+    W->>S: Atomically reserve global start slot
+    S-->>W: Reserved timestamp
+    W->>W: Wait until reserved time
+    W->>P: One structured request
+    P-->>W: JSON response or HTTP error
+    W->>S: On success, store compressed raw response privately
+    W->>S: On HTTP 429, set shared one-hour circuit
+    W->>B: Record parsed rows, event, and diagnostic
+    W-->>Q: Success or bounded retryable response
 ```
 
 ## 9. Idempotency And Retry Containment
