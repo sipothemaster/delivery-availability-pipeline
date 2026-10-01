@@ -1,5 +1,7 @@
 # Delivery Availability Pipeline
 
+[![DOI](https://zenodo.org/badge/1262984409.svg)](https://doi.org/10.5281/zenodo.23085786)
+
 Research software for collecting and structuring postcode-level food-delivery
 availability data. The current implementation targets Just Eat and runs on
 Google Cloud using Cloud Run, Cloud Tasks, Cloud Storage, and BigQuery.
