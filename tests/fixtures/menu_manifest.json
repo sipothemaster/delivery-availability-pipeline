@@ -1,0 +1,31 @@
+{
+  "RestaurantId": 1001,
+  "ItemsUrl": "https://example.invalid/items.json",
+  "ItemDetailsUrl": "https://example.invalid/item-details.json",
+  "Menus": [{"Id": "synthetic-menu"}],
+  "RestaurantInfo": {
+    "Name": "Example Grocery",
+    "TimeZone": "Europe/London",
+    "IsOffline": false,
+    "RestaurantOpeningTimes": [
+      {
+        "ServiceType": "Delivery",
+        "TimesPerDay": [
+          {
+            "DayOfWeek": "Monday",
+            "Times": [
+              {"FromLocalTime": "11:00:00", "ToLocalTime": "14:00:00"},
+              {"FromLocalTime": "17:00:00", "ToLocalTime": "23:00:00"}
+            ]
+          },
+          {
+            "DayOfWeek": "Friday",
+            "Times": [
+              {"FromLocalTime": "23:00:00", "ToLocalTime": "02:00:00"}
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}

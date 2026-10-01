@@ -2,5 +2,6 @@ google-cloud-bigquery
 google-cloud-storage
 google-cloud-tasks
 pyarrow
+tzdata
 Flask
 gunicorn

@@ -54,9 +54,11 @@ distributed across those intervals. The intervals are capacity shards for one
 observation tag; they do not mean every postcode is collected once per date.
 This prevents accidental multiplication of an intended single observation.
 
-The worker and scheduler must leave capacity margin so tasks finish inside the
-intended interval. Runs use distinct identifiers, table suffixes, queue names,
-and limiter state when isolation is necessary.
+The scheduler leaves the final 60 seconds of each interval unassigned, and new
+task payloads carry `window_end_at`. A worker that receives an expired task
+records the outcome and does not contact the provider. Runs use distinct
+identifiers, table suffixes, queue names, and limiter state when isolation is
+necessary.
 
 ## Parsing
 
@@ -74,7 +76,7 @@ weekday, and interval. Cross-midnight intervals are explicitly marked.
 Validation proceeds from offline parsing to a tiny local probe, then an isolated
 cloud sample, and finally a bounded full run. Checks include:
 
-- deterministic job and snapshot identifiers;
+- deterministic task and job identifiers, plus snapshot provenance;
 - request-start gaps and queue throughput;
 - HTTP status and latency distributions;
 - 403, 429, and 5xx outcomes;

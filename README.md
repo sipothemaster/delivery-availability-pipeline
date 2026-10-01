@@ -77,6 +77,13 @@ Install optional research and export dependencies separately:
 .\.venv\Scripts\playwright.exe install chromium
 ```
 
+Run the offline test suite without contacting provider endpoints or cloud
+resources:
+
+```powershell
+.\.venv\Scripts\python.exe -m unittest discover -s tests -v
+```
+
 ## Configuration
 
 Real cloud identifiers belong in deployment-time environment variables or a

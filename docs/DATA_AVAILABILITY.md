@@ -25,8 +25,9 @@ contains placeholders rather than deployment identities. Researchers wishing to
 reuse the method must conduct their own review of current platform terms,
 institutional approval, and data governance before collecting new observations.
 
-Synthetic fixtures may be added in future for offline parser tests. They must
-not reproduce identifiable records copied from private source responses.
+The repository includes small, invented fixtures under `tests/fixtures/` for
+offline parser and scheduling tests. They do not reproduce identifiable records
+copied from private source responses.
 
 ## Citation
 

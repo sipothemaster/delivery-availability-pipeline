@@ -18,12 +18,13 @@ from cloud_pipeline.create_week_jobs_cloud import (
     DEFAULT_WINDOW_NAMES,
     build_windows,
     parse_local_date,
-    schedule_across_intervals,
+    schedule_across_intervals_with_bounds,
 )
 
 
 LONDON = ZoneInfo("Europe/London")
 UTC = ZoneInfo("UTC")
+CLOUD_TASK_DELIVERY_MAX_ATTEMPTS = 20
 
 
 def clean_postcode(postcode):
@@ -215,10 +216,16 @@ def build_payloads(
     manifest_rows = []
     for planned_window in windows:
         if schedule_now:
-            scheduled_values = immediate_schedule(len(postcodes))
+            scheduled_values = [
+                (scheduled_at, None)
+                for scheduled_at in immediate_schedule(len(postcodes))
+            ]
         else:
-            scheduled_values = schedule_across_intervals(windows_config[planned_window], len(postcodes))
-        for postcode, scheduled_at in zip(postcodes, scheduled_values):
+            scheduled_values = schedule_across_intervals_with_bounds(
+                windows_config[planned_window],
+                len(postcodes),
+            )
+        for postcode, (scheduled_at, window_end_at) in zip(postcodes, scheduled_values):
             job_id = stable_job_id(run_id, provider, planned_window, postcode)
             payload = {
                 "job_id": job_id,
@@ -227,11 +234,12 @@ def build_payloads(
                 "postcode": postcode,
                 "planned_window": planned_window,
                 "scheduled_at": scheduled_at.isoformat(),
+                "window_end_at": window_end_at.isoformat() if window_end_at else None,
             }
             payloads.append(payload)
             manifest_rows.append(
                 {
-                    **payload,
+                    **{key: value for key, value in payload.items() if key != "window_end_at"},
                     "created_at": created_at,
                     "task_name": task_name_for_job(queue_id, job_id),
                     "status": "pending",
@@ -267,13 +275,19 @@ def build_payloads_skipping_existing(
         missing_postcodes = [postcode for postcode in postcodes if postcode not in existing]
         skipped[planned_window] = len(postcodes) - len(missing_postcodes)
         if schedule_now:
-            scheduled_values = immediate_schedule(len(missing_postcodes))
+            scheduled_values = [
+                (scheduled_at, None)
+                for scheduled_at in immediate_schedule(len(missing_postcodes))
+            ]
         else:
-            scheduled_values = schedule_across_intervals(
+            scheduled_values = schedule_across_intervals_with_bounds(
                 windows_config[planned_window],
                 len(missing_postcodes),
             )
-        for postcode, scheduled_at in zip(missing_postcodes, scheduled_values):
+        for postcode, (scheduled_at, window_end_at) in zip(
+            missing_postcodes,
+            scheduled_values,
+        ):
             job_id = stable_job_id(run_id, provider, planned_window, postcode)
             payload = {
                 "job_id": job_id,
@@ -282,11 +296,12 @@ def build_payloads_skipping_existing(
                 "postcode": postcode,
                 "planned_window": planned_window,
                 "scheduled_at": scheduled_at.isoformat(),
+                "window_end_at": window_end_at.isoformat() if window_end_at else None,
             }
             payloads.append(payload)
             manifest_rows.append(
                 {
-                    **payload,
+                    **{key: value for key, value in payload.items() if key != "window_end_at"},
                     "created_at": created_at,
                     "task_name": task_name_for_job(queue_id, job_id),
                     "status": "pending",
@@ -313,7 +328,7 @@ def ensure_queue(queue_id, max_dispatches_per_second, max_concurrent_dispatches)
             max_concurrent_dispatches=max_concurrent_dispatches,
         ),
         retry_config=tasks_v2.RetryConfig(
-            max_attempts=3,
+            max_attempts=CLOUD_TASK_DELIVERY_MAX_ATTEMPTS,
             min_backoff=timedelta(seconds=30),
             max_backoff=timedelta(minutes=10),
             max_doublings=5,
@@ -594,6 +609,9 @@ def main():
             f"{args.daily_start_date} + {args.daily_days} day(s), "
             f"{args.daily_local_start_time} -> {args.daily_local_end_time}"
         )
+    elif using_explicit_windows:
+        source = args.window_intervals_file or "inline JSON"
+        print(f"Schedule: explicit intervals from {source}")
     else:
         print(f"Schedule: {args.weeks} week(s) from {parse_local_date(args.start_date).isoformat()}")
     print(f"Tasks to create: {len(payloads)}")

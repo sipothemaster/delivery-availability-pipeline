@@ -1,0 +1,50 @@
+{
+  "filters": {
+    "groceries": {
+      "restaurantIds": ["1001"]
+    }
+  },
+  "restaurants": [
+    {
+      "id": 1001,
+      "name": "Example Grocery",
+      "uniqueName": "example-grocery",
+      "isDelivery": true,
+      "isOpenNowForDelivery": true,
+      "isTemporarilyOffline": false,
+      "cuisines": [
+        {"name": "Groceries", "uniqueName": "groceries"}
+      ],
+      "rating": {"starRating": 4.5, "count": 120},
+      "deliveryEtaMinutes": {"rangeLower": 20, "rangeUpper": 35},
+      "deliveryCost": 1.5,
+      "minimumDeliveryValue": 10,
+      "deals": [{"description": "Synthetic offer"}],
+      "tags": ["Synthetic"]
+    },
+    {
+      "id": 1002,
+      "name": "Closed Example",
+      "uniqueName": "closed-example",
+      "isDelivery": true,
+      "isOpenNowForDelivery": false,
+      "isTemporarilyOffline": false
+    },
+    {
+      "id": 1003,
+      "name": "Offline Example",
+      "uniqueName": "offline-example",
+      "isDelivery": true,
+      "isOpenNowForDelivery": true,
+      "isTemporarilyOffline": true
+    },
+    {
+      "id": 1004,
+      "name": "Collection Example",
+      "uniqueName": "collection-example",
+      "isDelivery": false,
+      "isOpenNowForDelivery": true,
+      "isTemporarilyOffline": false
+    }
+  ]
+}

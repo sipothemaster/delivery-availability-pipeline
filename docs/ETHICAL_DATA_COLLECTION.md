@@ -43,6 +43,8 @@ Every run begins with a finite postcode input. The task creator reports the numb
 
 Tasks are assigned to explicit local-time intervals. A window configuration defines when a task is eligible, rather than relying on workers to consume one undifferentiated backlog as quickly as possible.
 
+The scheduler leaves the final `60 seconds` of each interval unassigned. Every newly scheduled task also carries the end of its assigned interval as `window_end_at`. If Cloud Tasks delivers it at or after that boundary, the worker records `expired_window`, acknowledges the task, and makes no provider request. The guard absorbs ordinary dispatch variation; the explicit end time prevents an unusually delayed task from becoming an observation in a different window.
+
 ### 4.3 Capacity shards, not repeated observations
 
 When one observation tag has several eligible dates, those intervals are capacity shards. Each postcode is assigned once for that tag. The system does not silently turn four dates into four national observations.
@@ -63,7 +65,8 @@ The established postcode configuration uses:
 
 - maximum dispatch rate: `1 task/second`;
 - maximum concurrent dispatches: `4`;
-- maximum attempts: `3`;
+- maximum Cloud Tasks delivery attempts: `20`;
+- maximum provider attempts recorded in the job manifest: `3`;
 - minimum retry backoff: `30 seconds`; and
 - maximum retry backoff: `10 minutes`.
 
@@ -73,6 +76,10 @@ These values have separate meanings:
 - **Concurrency** limits how many task requests can be active at the worker at once.
 - **Backoff** prevents an immediate tight retry loop after a worker failure.
 - **Scheduled time** spreads the national workload across the intended research windows.
+
+Queue delivery attempts and provider attempts are intentionally separate. A task deferred by the shared 429 circuit has not made a provider request, so the larger queue retry budget allows it to remain recoverable across the one-hour pause. The worker still stops after three recorded provider starts, and an expired observation window is acknowledged without an upstream request.
+
+When `--skip-queue-setup` is used, the existing queue must already have these rate and retry controls. Skipping setup prevents the task creator from applying or verifying them.
 
 Cloud Tasks is not treated as the final API rate limiter. A task may spend different amounts of time in worker startup, validation, BigQuery checks, or storage operations before it reaches the provider. Multiple workers can therefore approach the upstream request point close together even when task dispatch looked regular.
 
@@ -187,7 +194,9 @@ The pipeline contains several protections against duplicate collection:
 - deterministic job identifiers allow task creation to resume;
 - `--skip-existing` excludes postcodes already recorded for a run and window;
 - a worker returns without calling the provider when a success event already exists; and
-- a manifest-level maximum-attempt count prevents unlimited provider attempts.
+- a manifest-level maximum-attempt count prevents unlimited provider attempts;
+- a task delivered after `window_end_at` is acknowledged without a provider request; and
+- the larger Cloud Tasks delivery budget allows circuit-deferred tasks to survive the pause without increasing the provider-attempt budget.
 
 The API client itself performs one request and does not contain an aggressive immediate retry loop. Cloud Tasks handles bounded retries outside the worker, where they remain subject to the circuit breaker and global limiter.
 
@@ -252,6 +261,7 @@ Requests use a descriptive research User-Agent containing the public repository 
 - A request-start limiter does not eliminate all overlapping in-flight requests.
 - Reserved start slots can be delayed by process scheduling, so actual request-start gaps must be monitored.
 - The 429 circuit cannot cancel requests already in flight.
+- Legacy task payloads created before `window_end_at` was introduced cannot be rejected against a hard window boundary.
 - HTTP 403, empty results, and temporary offline states can have several meanings.
 - Platform delivery and opening states are observations, not contractual facts.
 - The software's MIT licence does not grant rights to third-party content.

@@ -12,6 +12,7 @@ from cloud_pipeline import config
 
 
 LONDON = ZoneInfo("Europe/London")
+WINDOW_END_GUARD_SECONDS = 60
 
 
 WINDOW_RULES = {
@@ -70,31 +71,69 @@ def read_postcodes(path, limit=None):
     return postcodes
 
 
-def schedule_across_intervals(intervals, count):
+def schedule_across_intervals_with_bounds(
+    intervals,
+    count,
+    end_guard_seconds=WINDOW_END_GUARD_SECONDS,
+):
     if count <= 0:
         return []
-    parsed = [local_interval(start, end) for start, end in intervals]
-    durations = [(end - start).total_seconds() for start, end in parsed]
+    if end_guard_seconds < 0:
+        raise ValueError("Window end guard must not be negative.")
+
+    parsed = []
+    for start_text, end_text in intervals:
+        start, end = local_interval(start_text, end_text)
+        guarded_end = end - timedelta(seconds=end_guard_seconds)
+        if guarded_end <= start:
+            raise ValueError("Window intervals must be longer than the end guard.")
+        parsed.append((start, guarded_end, end))
+
+    durations = [(guarded_end - start).total_seconds() for start, guarded_end, _ in parsed]
     total_seconds = sum(durations)
     if total_seconds <= 0:
         raise ValueError("Window intervals must have positive duration.")
     if count == 1:
-        return [parsed[0][0].astimezone(ZoneInfo("UTC")).replace(microsecond=0)]
+        start, _, end = parsed[0]
+        return [
+            (
+                start.astimezone(ZoneInfo("UTC")).replace(microsecond=0),
+                end.astimezone(ZoneInfo("UTC")).replace(microsecond=0),
+            )
+        ]
 
     scheduled = []
-    step_seconds = total_seconds / (count - 1)
+    step_seconds = total_seconds / count
     for index in range(count):
-        offset = round(index * step_seconds)
+        offset = index * step_seconds
         remaining = offset
-        for (start, end), duration in zip(parsed, durations):
-            if remaining <= duration:
+        for (start, _, interval_end), duration in zip(parsed, durations):
+            if remaining < duration:
                 scheduled_at = start + timedelta(seconds=remaining)
-                scheduled.append(scheduled_at.astimezone(ZoneInfo("UTC")).replace(microsecond=0))
+                scheduled.append(
+                    (
+                        scheduled_at.astimezone(ZoneInfo("UTC")).replace(microsecond=0),
+                        interval_end.astimezone(ZoneInfo("UTC")).replace(microsecond=0),
+                    )
+                )
                 break
             remaining -= duration
-        else:
-            scheduled.append(parsed[-1][1].astimezone(ZoneInfo("UTC")).replace(microsecond=0))
     return scheduled
+
+
+def schedule_across_intervals(
+    intervals,
+    count,
+    end_guard_seconds=WINDOW_END_GUARD_SECONDS,
+):
+    return [
+        scheduled_at
+        for scheduled_at, _ in schedule_across_intervals_with_bounds(
+            intervals,
+            count,
+            end_guard_seconds=end_guard_seconds,
+        )
+    ]
 
 
 def build_rows(postcodes, window_names, windows_config, provider, max_attempts):

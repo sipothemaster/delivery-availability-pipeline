@@ -47,6 +47,29 @@ def millis_to_datetime(value):
     return datetime.fromtimestamp(value / 1000, tz=timezone.utc)
 
 
+def task_window_expired(payload, now=None):
+    window_end_text = payload.get("window_end_at")
+    if not window_end_text:
+        return False
+    window_end = datetime.fromisoformat(window_end_text)
+    if window_end.tzinfo is None:
+        raise ValueError("window_end_at must include a timezone offset.")
+    return (now or utc_now_precise()) >= window_end.astimezone(timezone.utc)
+
+
+def manifest_payload_mismatches(manifest_job, payload):
+    mismatches = []
+    for field in ("run_id", "provider", "postcode", "planned_window"):
+        expected = manifest_job.get(field)
+        actual = payload.get(field)
+        if field == "postcode":
+            expected = clean_postcode(expected)
+            actual = clean_postcode(actual)
+        if str(expected) != str(actual):
+            mismatches.append(field)
+    return mismatches
+
+
 def env_bool(name, default=False):
     value = os.getenv(name)
     if value is None:
@@ -717,6 +740,12 @@ def handle_justeat_task():
         insert_event(bq_client, payload, "rejected", message="Job is not in job_manifest")
         return jsonify({"ok": False, "error": "Job is not in job_manifest"}), 404
 
+    mismatches = manifest_payload_mismatches(manifest_job, payload)
+    if mismatches:
+        message = f"Task payload does not match job_manifest: {', '.join(mismatches)}"
+        insert_event(bq_client, payload, "rejected", message=message)
+        return jsonify({"ok": False, "error": message}), 409
+
     success_event = get_success_event(bq_client, payload["job_id"])
     if success_event:
         return jsonify(
@@ -732,6 +761,11 @@ def handle_justeat_task():
     if attempts >= int(manifest_job["max_attempts"]):
         insert_event(bq_client, payload, "rejected", message="Max attempts reached")
         return jsonify({"ok": True, "skipped": "max_attempts_reached"})
+
+    if task_window_expired(payload):
+        message = f"Observation window ended at {payload['window_end_at']}"
+        insert_event(bq_client, payload, "expired_window", message=message)
+        return jsonify({"ok": True, "skipped": "window_expired"})
 
     diagnostic["worker_started_at"] = utc_now_precise()
     try:

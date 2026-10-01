@@ -46,6 +46,7 @@ archive the software release only; collected data must not be attached.
   visible.
 - Download the archived source and repeat the identifier and secret scans.
 - Verify that GitHub's **Cite this repository** output matches `CITATION.cff`.
-- Mark the release date in `CHANGELOG.md`.
+- Verify that the release date in `CHANGELOG.md` and `CITATION.cff` matches the
+  published release.
 - Do not reuse a version number after publication; release fixes under a new
   semantic version.

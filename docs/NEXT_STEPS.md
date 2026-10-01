@@ -2,14 +2,17 @@
 
 ## Before Version 1.0.0
 
-1. Add offline tests for listing parsing, temporal scheduling, opening-time
-   normalisation, and deterministic identifiers.
-2. Add synthetic fixtures that contain no copied provider records.
-3. Run dependency, secret, absolute-path, and deployment-identifier scans.
-4. Review the responsible-collection account against the released code.
-5. Confirm the University of Leeds copyright and release approval record.
-6. Connect the GitHub repository to Zenodo and publish a tagged release.
-7. Add the resulting version DOI to `CITATION.cff` and the README.
+Release-candidate preparation completed on 2026-10-01: offline tests and
+synthetic fixtures were added; dependencies, credentials, paths, identifiers,
+tracked data, and documentation-to-code consistency were audited; and the
+`CITATION.cff` schema was validated.
+
+Remaining publication steps are:
+
+1. Confirm the University of Leeds release approval record.
+2. Connect the GitHub repository to Zenodo and publish the `v1.0.0` tag and
+   GitHub Release.
+3. Add the resulting version DOI to `CITATION.cff` and the README.
 
 ## Engineering Improvements
 
@@ -22,6 +25,8 @@
   request-start gaps, and duplicate analytical keys.
 - Package the offline parser so it can be demonstrated entirely from synthetic
   fixtures.
+- Add a cross-platform dependency lock or constraints file for exact environment
+  reconstruction in addition to the tested direct requirements.
 
 ## Research Extensions
 

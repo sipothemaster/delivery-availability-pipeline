@@ -9,6 +9,17 @@ excluded.
 - Reworked the responsible-collection documentation around a four-layer traffic-control model: bounded window assignment, Cloud Tasks pacing, a cross-instance global request-start hard lock, and a shared HTTP 429 circuit breaker.
 - Added exact limiter reservation semantics, retry containment, monitoring evidence, limitations, and a simplified request sequence diagram.
 - Made the postcode global limiter and 429 circuit breaker enabled by default, and aligned direct task-creator queue defaults with the documented `1 task/second` and concurrency `4` configuration.
+- Completed the version 1.0.0 release-candidate audit: no credentials or tracked
+  research data were found, current deployment identifiers and absolute paths
+  are redacted, declared dependencies reported no known vulnerabilities, and
+  citation metadata passed the CFF 1.2.0 schema check.
+- Added invented offline fixtures and tests for listing parsing, scheduling,
+  stable identifiers, entrypoint defaults, and opening-time normalisation.
+- Added portable timezone data, a 60-second interval-end scheduling guard,
+  explicit task-window expiry, and sufficient queue delivery retries to span
+  the one-hour 429 circuit while retaining a three-attempt provider limit.
+- Added worker-side checks that reject task payloads whose run, provider,
+  postcode, or observation tag does not match the recorded manifest job.
 
 ## 2026-09-30
 

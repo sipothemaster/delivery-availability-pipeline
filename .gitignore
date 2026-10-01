@@ -6,6 +6,7 @@ data/
 *.sqlite
 *.db
 *.csv
+!tests/fixtures/*.csv
 *.xlsx
 *.json.gz
 *.parquet

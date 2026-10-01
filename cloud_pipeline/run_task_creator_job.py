@@ -20,8 +20,8 @@ def main():
         os.environ["OIDC_SERVICE_ACCOUNT_EMAIL"],
     )
     add_arg(args, "--queue-id", os.getenv("TASK_QUEUE_ID", "delivery-scrape-tasks"))
-    add_arg(args, "--max-dispatches-per-second", os.getenv("MAX_DISPATCHES_PER_SECOND", "0.8"))
-    add_arg(args, "--max-concurrent-dispatches", os.getenv("MAX_CONCURRENT_DISPATCHES", "2"))
+    add_arg(args, "--max-dispatches-per-second", os.getenv("MAX_DISPATCHES_PER_SECOND", "1"))
+    add_arg(args, "--max-concurrent-dispatches", os.getenv("MAX_CONCURRENT_DISPATCHES", "4"))
     add_arg(args, "--weeks", os.getenv("SCHEDULE_WEEKS", "2"))
 
     run_id = os.getenv("RUN_ID")
