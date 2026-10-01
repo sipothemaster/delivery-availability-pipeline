@@ -33,6 +33,8 @@ Cloud Tasks is not treated as the final API limiter: it controls delivery to wor
 
 The project does not use account login, CAPTCHA bypass, proxy rotation, or access-control evasion. Raw responses and derived research data remain private. These controls do not by themselves establish legal permission for every use; operators must review current terms, robots guidance, institutional approvals, and applicable law. See [Responsible data collection](docs/ETHICAL_DATA_COLLECTION.md) for the full design, diagram, and limitations.
 
+The responsible-collection design was informed by the general principles in the [Office for National Statistics Web Scraping Policy](https://www.ons.gov.uk/aboutus/transparencyandgovernance/datastrategy/datapolicies/webscrapingpolicy), including minimising burden on website operators, respecting applicable access restrictions, maintaining transparency, and reviewing legal and ethical considerations.
+
 ## Data Model
 
 The pipeline can produce four analytical entities:

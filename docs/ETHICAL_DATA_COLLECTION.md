@@ -255,3 +255,11 @@ Requests use a descriptive research User-Agent containing the public repository 
 - HTTP 403, empty results, and temporary offline states can have several meanings.
 - Platform delivery and opening states are observations, not contractual facts.
 - The software's MIT licence does not grant rights to third-party content.
+
+## 15. External Guidance
+
+The responsible-collection design was informed by the general principles in the [Office for National Statistics Web Scraping Policy](https://www.ons.gov.uk/aboutus/transparencyandgovernance/datastrategy/datapolicies/webscrapingpolicy). In particular, the project reflects the policy's emphasis on minimising burden on website operators, respecting applicable access restrictions, maintaining transparency, and reviewing legal and ethical considerations.
+
+These principles are reflected in the pipeline through bounded collection inputs, explicit time windows, Cloud Tasks pacing, a shared global request-start lock, a one-hour circuit breaker after HTTP 429 responses, auditable request diagnostics, and private handling of raw responses and derived research data.
+
+The ONS policy is written for ONS activities and states that its scope does not cover APIs. This project therefore cites it as influential guidance rather than claiming formal compliance with, certification by, or endorsement from the ONS.
